@@ -556,22 +556,15 @@ const bannerEl = document.getElementById('event-banner');
 const menuBtnEl = document.getElementById('menu-btn');
 const menuModalEl = document.getElementById('menu-modal');
 const menuInfoEl = document.getElementById('menu-info');
-// Aliases — pre-tab refactor names still used in render functions.
-const achBtnEl = menuBtnEl;
 // achCountEl removed — menu summary now serves as combined count.
-const achModalEl = menuModalEl;
 const achListEl = document.getElementById('ach-list');
 const achSubEl = document.getElementById('ach-sub');
 
 const treatRowsById = {}; // built once by buildTreatRows()
 const bakeryEl = document.getElementById('bakery');
 const goldenEl = document.getElementById('golden');
-const ascendBtnEl = menuBtnEl;       // alias — visibility-tracking goes via tab
-const ascendModalEl = menuModalEl;
 const ascendDetailEl = document.getElementById('ascend-detail');
 // ascendInfoEl removed — folded into menu summary.
-const shopBtnEl = menuBtnEl;          // alias
-const shopModalEl = menuModalEl;
 const shopSubEl = document.getElementById('shop-sub');
 const shopListEl = document.getElementById('shop-list');
 // shopInfoEl removed — folded into menu summary.
@@ -789,7 +782,7 @@ function checkAchievements() {
   }
   if (any) {
     save(); renderAchPanel();
-    achBtnEl.classList.remove('popped'); void achBtnEl.offsetWidth; achBtnEl.classList.add('popped');
+    menuBtnEl.classList.remove('popped'); void menuBtnEl.offsetWidth; menuBtnEl.classList.add('popped');
     SFX.ach();
   }
 }
@@ -1073,7 +1066,7 @@ function openAscendPane() {
 document.getElementById('ascend-confirm').addEventListener('click', () => {
   const earnable = crownsForLifetime(state.lifetime);
   const gain = earnable - (state.crowns || 0);
-  if (gain <= 0) { ascendModalEl.classList.remove('show'); return; }
+  if (gain <= 0) { menuModalEl.classList.remove('show'); return; }
   // Carry forward: economy resets, but progression markers persist so unlocked
   // achievements stay coherent (no vanishing egg, no re-armed 24h timer, etc).
   const shop = state.crownShop || {};
