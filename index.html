@@ -251,7 +251,7 @@ function load() {
     state.saveVersion = 2;
     if (isV1) { localStorage.removeItem(SAVE_KEY_V1); save(); }
     const dt = Math.min((Date.now() - state.lastTick) / 1000, OFFLINE_CAP_SEC);
-    const offlineGain = Math.floor(dt * passiveRate());
+    const offlineGain = Math.floor(dt * rate());
     if (offlineGain > 0) { state.count += offlineGain; state.lifetime += offlineGain; toast(`+${fmt(offlineGain)} while you were gone`); }
   } catch {}
   state.lastTick = Date.now();
@@ -285,7 +285,8 @@ function effectMultiplier() {
 function achievementBonus() {
   return Object.keys(state.achievements || {}).length * ACH_BONUS_PER_UNLOCK;
 }
-function rate() { return passiveRate() * (1 + achievementBonus()) * effectMultiplier(); }
+function globalMult() { return (1 + achievementBonus()) * effectMultiplier(); }
+function rate() { return passiveRate() * globalMult(); }
 function comboTier() {
   // Walk thresholds high→low, return matching multiplier index.
   for (let i = COMBO_THRESHOLDS.length - 1; i >= 0; i--) {
@@ -301,7 +302,7 @@ function comboTierIndex() {
 }
 function tapAmount() {
   const bonus = TREATS.filter(t => t.tapBonus).reduce((s, t) => s + (t.tapBonus * (state.owned[t.id] || 0)), 0);
-  return (1 + bonus) * comboTier() * (1 + achievementBonus()) * effectMultiplier();
+  return (1 + bonus) * comboTier() * globalMult();
 }
 function priceOf(t) { return Math.ceil(t.cost * Math.pow(t.costGrowth, state.owned[t.id] || 0)); }
 function toast(msg) {
@@ -589,8 +590,8 @@ document.getElementById('reset').addEventListener('click', () => {
 setInterval(() => {
   const now = Date.now();
   state.activeEffects = state.activeEffects.filter(e => now < e.expiresAt);
-  const r = passiveRate();
-  if (r > 0) { const gained = r * effectMultiplier(); state.count += gained; state.lifetime += gained; }
+  const r = rate();
+  if (r > 0) { state.count += r; state.lifetime += r; }
   state.lastTick = now;
   renderCount();
   refreshTreats();
