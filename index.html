@@ -87,10 +87,6 @@
   #reset { right: 8px; bottom: calc(env(safe-area-inset-bottom) + 4px); top: auto; padding: 8px 10px; font-size: 0.62rem; color: rgba(255,255,255,0.32); background: transparent; min-height: 0; min-width: 0; }
   #reset:hover { color: rgba(255,255,255,0.6); background: rgba(0,0,0,0.3); }
   /* Shop + ascend are inline in the header, beneath effects, never overlaying the count. */
-  .header-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 10px; }
-  .header-actions:empty { margin: 0; }
-  .header-btn { background: rgba(60,40,20,0.6); color: rgba(255,255,255,0.9); border: none; padding: 10px 14px; border-radius: 10px; font-size: 0.85rem; cursor: pointer; min-height: 40px; }
-  .header-btn:hover { background: rgba(60,40,20,0.85); }
   .event-banner { position: fixed; top: calc(env(safe-area-inset-top) + 12px); left: 50%; transform: translateX(-50%) translateY(-20px); padding: 10px 16px; background: rgba(40,20,10,0.94); border: 1px solid rgba(255,220,180,0.35); border-radius: 10px; max-width: 90vw; font-size: 0.85rem; z-index: 200; opacity: 0; transition: opacity 0.3s, transform 0.3s; pointer-events: none; }
   .event-banner.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   .event-banner.kind-buff { border-color: rgba(120,200,120,0.6); }
@@ -844,7 +840,6 @@ const bannerEl = document.getElementById('event-banner');
 const menuBtnEl = document.getElementById('menu-btn');
 const menuModalEl = document.getElementById('menu-modal');
 const menuInfoEl = document.getElementById('menu-info');
-// achCountEl removed — menu summary now serves as combined count.
 const achListEl = document.getElementById('ach-list');
 const achSubEl = document.getElementById('ach-sub');
 const statsEl = document.getElementById('stats');
@@ -853,10 +848,8 @@ const treatRowsById = {}; // built once by buildTreatRows()
 const bakeryEl = document.getElementById('bakery');
 const goldenEl = document.getElementById('golden');
 const ascendDetailEl = document.getElementById('ascend-detail');
-// ascendInfoEl removed — folded into menu summary.
 const shopSubEl = document.getElementById('shop-sub');
 const shopListEl = document.getElementById('shop-list');
-// shopInfoEl removed — folded into menu summary.
 const bakeryAssetsById = {}; // built lazily by refreshBakery()
 
 // Per-baker contribution (rate × owned × stacked synergy mults).
@@ -1462,10 +1455,6 @@ document.querySelectorAll('.menu-tab').forEach(btn => btn.addEventListener('clic
 function crownsForLifetime(lifetime) {
   return Math.floor(Math.sqrt(Math.max(0, lifetime) / CROWN_DIVISOR));
 }
-function refreshAscend() {
-  // Tab-based menu now handles visibility; just refresh the menu summary line.
-  refreshMenu();
-}
 function openAscendPane() {
   const earnable = crownsForLifetime(state.lifetime);
   const gain = Math.max(0, earnable - (state.crowns || 0));
@@ -1523,14 +1512,10 @@ document.getElementById('ascend-confirm').addEventListener('click', () => {
   SFX.ascend();
   const tail = crustPayout > 0 ? ` (carried crust payout: +${fmt(crustPayout)})` : '';
   toast(`✨ ascended. +${gain}👑 — total ${state.crowns}${tail}`);
-  save(); renderCount(); refreshTreats(); refreshBakery(); renderAchPanel(); refreshAscend(); refreshShop();
+  save(); renderCount(); refreshTreats(); refreshBakery(); renderAchPanel(); refreshMenu();
 });
 
 // Crown Shop — spend crowns on permanent meta-upgrades.
-function refreshShop() {
-  // Tab-based menu now handles visibility; menu summary covers crowns.
-  refreshMenu();
-}
 function renderShop() {
   shopSubEl.textContent = `you have ${state.crowns || 0}👑 to spend.`;
   shopListEl.innerHTML = '';
@@ -1571,7 +1556,7 @@ function buyShopItem(id) {
   }
   toast(`🪙 ${item.name}`);
   save();
-  renderShop(); refreshShop(); refreshAscend(); renderCount();
+  renderShop(); refreshMenu(); renderCount();
 }
 
 // Yeast Garden — 3×3 mini-game.
@@ -2038,7 +2023,7 @@ document.getElementById('reset').addEventListener('click', () => {
   streakCount = 0;
   lastRenderedCount = -1; lastRenderedRate = -1; lastStreakTier = -1;
   setPumpEmoji();
-  renderCount(); refreshTreats(); refreshBakery(); renderAchPanel(); refreshAscend(); refreshShop();
+  renderCount(); refreshTreats(); refreshBakery(); renderAchPanel(); refreshMenu();
 });
 
 // Tick — passive accumulation + treat-affordability refresh + achievement check.
@@ -2108,7 +2093,7 @@ setInterval(() => {
   renderCount();
   renderEffects();
   refreshTreats();
-  refreshAscend();
+  refreshMenu();
   checkAchievements();
   // If a tab with live timers is open, refresh it so countdowns don't freeze.
   if (menuModalEl.classList.contains('show')) {
@@ -2127,8 +2112,7 @@ refreshBakery();
 setPumpEmoji();
 renderCount();
 renderAchPanel();
-refreshAscend();
-refreshShop();
+refreshMenu();
 renderEffects();
 renderPhase();
 setTimeout(() => scheduleNextEvent(), FIRST_EVENT_DELAY);
