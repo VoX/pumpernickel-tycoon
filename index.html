@@ -688,33 +688,30 @@ function fmt(n) {
   if (n < 1e9) return (n/1e6).toFixed(2).replace(/\.?0+$/, '') + 'M';
   return (n/1e9).toFixed(2).replace(/\.?0+$/, '') + 'B';
 }
+// Synergy stack for a baker — product of all owned synergy treats targeting it.
+// Hot path; called from passiveRate, bestRateBuy, and the burnt-crust tick.
+function synergyMultFor(bakerId) {
+  let mult = 1;
+  for (const s of TREATS) {
+    if (s.synergyTarget === bakerId && (state.owned[s.id] || 0) > 0) mult *= s.synergyMult;
+  }
+  return mult;
+}
+// passiveRate cache invalidated on buy/sell/crust mutation. Cuts the O(N²)
+// scan on hot paths (rate, tapAmount, fireEvent, spawnGolden, etc).
+let _passiveRateCache = null;
+function invalidatePassiveRate() { _passiveRateCache = null; }
 function passiveRate() {
+  if (_passiveRateCache !== null) return _passiveRateCache;
   let total = 0;
   for (const t of TREATS) {
     if (!t.rate) continue;
-    let mult = 1;
-    for (const s of TREATS) {
-      if (s.synergyTarget === t.id && (state.owned[s.id] || 0) > 0) mult *= s.synergyMult;
-    }
-    let contribution = t.rate * (state.owned[t.id] || 0) * mult;
-    // Burnt crust drain — each crust on this baker reduces its contribution.
-    const crustsHere = (state.burntCrusts || []).filter(c => c.bakerId === t.id).length;
+    let contribution = t.rate * (state.owned[t.id] || 0) * synergyMultFor(t.id);
+    const crustsHere = state.burntCrusts.filter(c => c.bakerId === t.id).length;
     if (crustsHere > 0) contribution *= Math.pow(1 - BURNT_CRUST_DRAIN_PCT, crustsHere);
     total += contribution;
   }
-  return total;
-}
-function bakerCrustDrainPerSecond(t) {
-  // Per-second loss from crusts on this baker (used for popout payout accumulator).
-  const crustsHere = (state.burntCrusts || []).filter(c => c.bakerId === t.id).length;
-  if (crustsHere === 0) return 0;
-  let mult = 1;
-  for (const s of TREATS) {
-    if (s.synergyTarget === t.id && (state.owned[s.id] || 0) > 0) mult *= s.synergyMult;
-  }
-  const baseContribution = t.rate * (state.owned[t.id] || 0) * mult;
-  const withDrain = baseContribution * Math.pow(1 - BURNT_CRUST_DRAIN_PCT, crustsHere);
-  return baseContribution - withDrain;
+  return _passiveRateCache = total;
 }
 function effectMultiplier() {
   const now = Date.now();
@@ -807,6 +804,7 @@ function sellOne(t) {
   if (owned <= 0) return;
   const refund = Math.floor(lastPriceOf(t) * 0.5);
   state.owned[t.id] = owned - 1;
+  invalidatePassiveRate();
   state.count += refund;
   // Lifetime isn't bumped — refunds recover past spend, not new earning.
   toast(`sold 1 ${t.name} · +${fmt(refund)}`);
@@ -852,10 +850,7 @@ const bakeryAssetsById = {}; // built lazily by refreshBakery()
 function bakerContribution(t) {
   const owned = state.owned[t.id] || 0;
   if (!t.rate || owned <= 0) return { contribution: 0, synergy: 1 };
-  let synergy = 1;
-  for (const s of TREATS) {
-    if (s.synergyTarget === t.id && (state.owned[s.id] || 0) > 0) synergy *= s.synergyMult;
-  }
+  const synergy = synergyMultFor(t.id);
   return { contribution: t.rate * owned * synergy, synergy };
 }
 function bakerInfo(t) {
@@ -1056,6 +1051,7 @@ function buy(t) {
   if (state.count < price) return;
   state.count -= price;
   state.owned[t.id] = (state.owned[t.id] || 0) + 1;
+  invalidatePassiveRate();
   if (t.doubleBank) {
     // Final bank = 2× pre-purchase bank. state.count just had `price` subtracted,
     // so add (pre + price) to land at 2*pre.
@@ -1090,12 +1086,8 @@ function bestRateBuy() {
       const targ = TREATS.find(x => x.id === t.synergyTarget);
       const owned = state.owned[t.synergyTarget] || 0;
       if (targ && owned > 0) {
-        // Account for already-owned synergy mults — adding tier-3 stacks on top
-        // of tier-1+2 the player already has, so the effective gain reflects that.
-        let existingSynergy = 1;
-        for (const s of TREATS) {
-          if (s.synergyTarget === t.synergyTarget && s.id !== t.id && (state.owned[s.id] || 0) > 0) existingSynergy *= s.synergyMult;
-        }
+        // Stack on top of synergies the player already owns on this baker.
+        const existingSynergy = synergyMultFor(t.synergyTarget) / (state.owned[t.id] > 0 ? t.synergyMult : 1);
         effRate = (targ.rate * owned * existingSynergy) * (t.synergyMult - 1);
       }
     }
@@ -1268,6 +1260,7 @@ function attachBurntCrust() {
   if (owned.length === 0) { scheduleNextBurntCrust(); return; }
   const t = owned[Math.floor(Math.random() * owned.length)];
   state.burntCrusts.push({ bakerId: t.id, attachedAt: Date.now(), drained: 0 });
+  invalidatePassiveRate();
   showBanner(`🥵 a burnt crust attached to your ${t.name}. tap to pop.`, 'debuff');
   refreshBakery();
   scheduleNextBurntCrust();
@@ -1283,6 +1276,7 @@ function popBurntCrust(crustIdx) {
   state.count += payout;
   state.lifetime += Math.max(0, payout - Math.floor(c.drained)); // only the bonus over what was drained
   state.burntCrusts.splice(crustIdx, 1);
+  invalidatePassiveRate();
   toast(`🥵 popped! +${fmt(payout)}`);
   SFX.golden();
   save(); renderCount(); refreshBakery();
@@ -1500,6 +1494,7 @@ document.getElementById('ascend-confirm').addEventListener('click', () => {
   };
   state = Object.assign(defaultState(), carry);
   if (shop.reinforced) state.owned.apprentice = (state.owned.apprentice || 0) + 1;
+  invalidatePassiveRate();
   streakCount = 0;
   lastRenderedCount = -1; lastRenderedRate = -1; lastStreakTier = -1;
   setPumpEmoji();
@@ -1551,6 +1546,7 @@ function buyShopItem(id) {
   if (id === 'eternalEgg') state.hasEgg = true;
   if (id === 'reinforced') {
     state.owned.apprentice = (state.owned.apprentice || 0) + 1;
+    invalidatePassiveRate();
     refreshTreats(); refreshBakery();
   }
   toast(`🪙 ${item.name}`);
@@ -2017,11 +2013,7 @@ setInterval(() => {
       if (!t) continue;
       // Per-tick drain = per-baker contribution × drain pct, scaled by globalMult
       // so payout matches "real" lost rate (ach/crown bonuses apply too).
-      let mult = 1;
-      for (const s of TREATS) {
-        if (s.synergyTarget === t.id && (state.owned[s.id] || 0) > 0) mult *= s.synergyMult;
-      }
-      const baseContribution = t.rate * (state.owned[t.id] || 0) * mult;
+      const baseContribution = t.rate * (state.owned[t.id] || 0) * synergyMultFor(t.id);
       c.drained += baseContribution * BURNT_CRUST_DRAIN_PCT * globalMult();
     }
     refreshBakery();
@@ -2065,6 +2057,7 @@ setInterval(save, SAVE_INTERVAL_MS);
 window.addEventListener('beforeunload', save);
 
 load();
+invalidatePassiveRate();
 buildTreatRows();
 refreshBakery();
 setPumpEmoji();
