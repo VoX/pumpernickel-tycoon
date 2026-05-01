@@ -14,6 +14,8 @@ import { CROWN_SHOP_ITEMS } from './content/crown-shop.js';
 import { SFX, setMuted, isMuted } from './systems/audio.js';
 import { initPumpPhysics, bouncePump, fireAura, pumpClickImpulse } from './systems/physics.js';
 import { state, defaultState, replaceState, save, load, invalidatePassiveRate } from './systems/state.js';
+import { synergyMultFor, passiveRate, effectMultiplier, hasCrown, achievementBonus, crownBonus, gardenBonus, hasGardenChaosBoost, eventPaceFactor, pantheonMod, hasActiveBuff, globalMult, rate, priceOf, lastPriceOf, BURNT_CRUST_DRAIN_PCT } from './systems/rate.js';
+import { currentPhase, phaseRateMult, phaseTapMult, phaseComboMult, phaseTreatDiscount } from './systems/phases.js';
 
 // Tunables that stay in main for now — phase 1c moves them to systems/.
 const COMBO_RESET_MS = 800;
@@ -43,7 +45,6 @@ const CRUMB_LIFETIME_MS = 850;
 const CRIT_CHANCE = 0.05;          // 5% per tap
 const CRIT_MULT = 10;              // ×10 on crit
 const CRIT_CRUMB_BONUS = 6;        // extra crumbs on crit
-const ACH_BONUS_PER_UNLOCK = 0.01; // +1% rate per achievement
 const TAP_RATE_FACTOR = 0.005;     // base click value scales with 5ms of current rate
 const GOLDEN_MIN_MS = 60000;
 const GOLDEN_MAX_MS = 180000;
@@ -57,14 +58,10 @@ const PHASE_DURATION_MS = 30 * 60 * 1000; // each sourdough phase lasts ~30 min 
 const BURNT_CRUST_THRESHOLD = 1e9;        // unlocks at 1B lifetime
 const BURNT_CRUST_MIN_MS = 5 * 60 * 1000; // 5min between attempts
 const BURNT_CRUST_MAX_MS = 15 * 60 * 1000;
-const BURNT_CRUST_DRAIN_PCT = 0.05;       // 5% of baker rate while attached
 const BURNT_CRUST_PAYOUT_MULT = 1.10;     // pop pays 110% of drained
 const BURNT_CRUST_MAX = 3;                // cap active crusts
 const ASCEND_THRESHOLD = 1e9;       // 1B lifetime to unlock first ascension
 const CROWN_DIVISOR = 1e9;          // crowns earned = floor(sqrt(lifetime / divisor))
-const CROWN_BONUS_PER = 0.05;       // each crown adds +5% to global rate
-const CROWN_BONUS_LEDGER = 0.06;    // upgraded rate when Royal Ledger owned
-const EVENT_PACE_PACING = 0.66;     // event interval scale when Cosmic Pacing owned
 const AUTO_BUY_INTERVAL_TICKS = 5;
 
 
@@ -83,116 +80,6 @@ function fmt(n) {
   if (n < 1e6) return (n/1000).toFixed(2).replace(/\.?0+$/, '') + 'K';
   if (n < 1e9) return (n/1e6).toFixed(2).replace(/\.?0+$/, '') + 'M';
   return (n/1e9).toFixed(2).replace(/\.?0+$/, '') + 'B';
-}
-// Synergy stack for a baker — product of all owned synergy treats targeting it.
-// Hot path; called from passiveRate, bestRateBuy, and the burnt-crust tick.
-function synergyMultFor(bakerId) {
-  let mult = 1;
-  for (const s of TREATS) {
-    if (s.synergyTarget === bakerId && (state.owned[s.id] || 0) > 0) mult *= s.synergyMult;
-  }
-  return mult;
-}
-// passiveRate cache invalidated on buy/sell/crust mutation. Cuts the O(N²)
-// scan on hot paths (rate, tapAmount, fireEvent, spawnGolden, etc).
-let _passiveRateCache = null;
-function passiveRate() {
-  if (_passiveRateCache !== null) return _passiveRateCache;
-  let total = 0;
-  for (const t of TREATS) {
-    if (!t.rate) continue;
-    let contribution = t.rate * (state.owned[t.id] || 0) * synergyMultFor(t.id);
-    const crustsHere = state.burntCrusts.filter(c => c.bakerId === t.id).length;
-    if (crustsHere > 0) contribution *= Math.pow(1 - BURNT_CRUST_DRAIN_PCT, crustsHere);
-    total += contribution;
-  }
-  return _passiveRateCache = total;
-}
-function effectMultiplier() {
-  const now = Date.now();
-  let m = 1;
-  for (const e of state.activeEffects) if (now < e.expiresAt) m *= e.mult;
-  return m;
-}
-function currentPhase() {
-  return PHASES[(state.phaseIndex || 0) % PHASES.length];
-}
-function phaseRateMult() { return currentPhase().rateMult || 1; }
-function phaseTapMult() { return currentPhase().tapMult || 1; }
-function phaseComboMult() { return currentPhase().comboMult || 1; }
-function phaseTreatDiscount() { return currentPhase().treatDiscount || 1; }
-function achievementBonus() {
-  return Object.keys(state.achievements || {}).length * ACH_BONUS_PER_UNLOCK * (1 + pantheonMod('achBonus'));
-}
-function hasCrown(id) { return !!(state.crownShop && state.crownShop[id]); }
-function crownBonus() {
-  return (state.crowns || 0) * (hasCrown('royalLedger') ? CROWN_BONUS_LEDGER : CROWN_BONUS_PER);
-}
-function eventPaceFactor() {
-  let f = hasCrown('pacing') ? EVENT_PACE_PACING : 1;
-  if (hasGardenChaosBoost()) f *= (1 / SPECIES.find(s => s.id === 'hops').chaosPaceMult);
-  return f;
-}
-function gardenBonus() {
-  return Math.min(state.barleyBonus || 0, GARDEN_BARLEY_CAP);
-}
-function hasGardenChaosBoost() {
-  // True while a 'g_hops' active effect is live (set on hops harvest).
-  const now = Date.now();
-  return (state.activeEffects || []).some(e => e.id === 'g_hops' && now < e.expiresAt);
-}
-// Pantheon modifier — sums slotted temperament effects weighted by slot.
-// Returns a fraction (e.g. 0.30 for +30%); apply as `× (1 + pantheonMod(stat))`.
-function pantheonMod(stat) {
-  let mod = 0;
-  if (!state.pantheon) return 0;
-  for (let i = 0; i < 3; i++) {
-    const tid = state.pantheon[i];
-    if (!tid) continue;
-    const t = TEMPERAMENTS.find(x => x.id === tid);
-    if (!t || t.mods[stat] === undefined) continue;
-    mod += t.mods[stat] * PANTHEON_SLOT_WEIGHTS[i];
-  }
-  return mod;
-}
-function hasActiveBuff() {
-  // Any live effect counts (buff or debuff). Used by Dreamer's rateNoBuff
-  // penalty so it doesn't double-stack on top of an active debuff.
-  const now = Date.now();
-  return (state.activeEffects || []).some(e => now < e.expiresAt && e.mult !== 1);
-}
-function globalMult() {
-  const baseMult = (1 + achievementBonus() + crownBonus() + gardenBonus()) * effectMultiplier() * phaseRateMult();
-  // Pantheon: rate stat, plus the no-buff penalty if dreamer is slotted and no buff is up.
-  let pantheonRate = pantheonMod('rate');
-  if (!hasActiveBuff()) pantheonRate += pantheonMod('rateNoBuff');
-  return baseMult * (1 + pantheonRate);
-}
-function rate() { return passiveRate() * globalMult(); }
-function comboTier() {
-  // Walk thresholds high→low, return matching multiplier index.
-  for (let i = COMBO_THRESHOLDS.length - 1; i >= 0; i--) {
-    if (streakCount >= COMBO_THRESHOLDS[i]) return COMBO_MULTIPLIERS[i + 1];
-  }
-  return COMBO_MULTIPLIERS[0];
-}
-function comboTierIndex() {
-  for (let i = COMBO_THRESHOLDS.length - 1; i >= 0; i--) {
-    if (streakCount >= COMBO_THRESHOLDS[i]) return i + 1;
-  }
-  return 0;
-}
-function tapAmount() {
-  const bonus = TREATS.filter(t => t.tapBonus).reduce((s, t) => s + (t.tapBonus * (state.owned[t.id] || 0)), 0);
-  const fromRate = passiveRate() * TAP_RATE_FACTOR;
-  const combo = comboTier() * phaseComboMult() * (1 + pantheonMod('combo'));
-  return (1 + bonus + fromRate) * combo * globalMult() * phaseTapMult() * (1 + pantheonMod('tap'));
-}
-function priceOf(t) { return Math.ceil(t.cost * Math.pow(t.costGrowth, state.owned[t.id] || 0) * phaseTreatDiscount()); }
-function lastPriceOf(t) {
-  const owned = state.owned[t.id] || 0;
-  if (owned <= 0) return 0;
-  return Math.ceil(t.cost * Math.pow(t.costGrowth, owned - 1) * phaseTreatDiscount());
 }
 function sellOne(t) {
   const owned = state.owned[t.id] || 0;
