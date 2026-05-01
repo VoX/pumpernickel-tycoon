@@ -62,6 +62,7 @@
   .topbtn { position: fixed; top: 10px; background: rgba(0,0,0,0.4); color: rgba(255,255,255,0.85); border: none; padding: 12px 14px; border-radius: 10px; font-size: 0.78rem; cursor: pointer; z-index: 50; min-height: 44px; min-width: 44px; }
   .topbtn:hover { color: #fff; background: rgba(0,0,0,0.6); }
   #ach-btn { left: 8px; }
+  #help-btn { right: 8px; font-size: 1rem; font-weight: 800; min-width: 44px; }
   #ascend-btn { left: 50%; transform: translateX(-50%); background: linear-gradient(180deg, #d4a93a, #a87a18); color: #2d1810; font-weight: 800; }
   #ascend-btn:hover { background: linear-gradient(180deg, #ffd060, #c98a18); }
   #shop-btn { left: 8px; top: 62px; background: rgba(60,40,20,0.6); }
@@ -143,6 +144,7 @@
   <button class="topbtn" id="ach-btn" aria-label="Achievements">🏆 <span id="ach-count"></span></button>
   <button class="topbtn" id="ascend-btn" aria-label="Ascend the Tinyclaw" hidden>👑 <span id="ascend-info">Ascend</span></button>
   <button class="topbtn" id="shop-btn" aria-label="Crown Shop" hidden>🪙 <span id="shop-info">Shop</span></button>
+  <button class="topbtn" id="help-btn" aria-label="How to play">?</button>
   <button class="topbtn" id="reset" aria-label="Reset save">RESET</button>
   <div class="toast" id="toast"></div>
   <div class="event-banner" id="event-banner"></div>
@@ -171,6 +173,22 @@
       <div class="ach-title">🪙 Crown Shop</div>
       <div class="ach-sub" id="shop-sub"></div>
       <div id="shop-list"></div>
+    </div>
+  </div>
+  <div class="ach-modal" id="help-modal" role="dialog" aria-label="How to play">
+    <div class="ach-card">
+      <button class="ach-close" id="help-close" aria-label="Close">×</button>
+      <div class="ach-title">how this works</div>
+      <div class="ach-sub">single-file idle clicker. tap, buy, ascend, repeat.</div>
+      <div style="font-size: 0.85rem; line-height: 1.7; padding: 4px;">
+        <p><b>tap 🍞</b> to collect pumpernickels. spend them in the treats shop on bakers (passive rate) and tap upgrades.</p>
+        <p><b>combo</b> — keep tapping fast (10 / 25 / 50 in a row) for ×2 / ×3 / ×5 streak bonuses.</p>
+        <p><b>crit</b> — 5% of taps deal ×10 damage, with a gold sparkle ✦ float.</p>
+        <p><b>chaos events</b> fire every 30-90s. buffs (green border), debuffs (red), instant gains/losses (amber). live effects show as pills under the rate. 3+ buffs in a row → next buff is doubled.</p>
+        <p><b>golden 🥯</b> spawns once a minute or so. tap it within 9 seconds for 60 seconds of your current rate as instant bonus.</p>
+        <p><b>achievements</b> 🏆 — each one earned adds +1% rate. some are hidden.</p>
+        <p><b>ascend 👑</b> at 1B lifetime. trade your kingdom for crowns (sqrt of lifetime / 1B). each crown grants +5% rate forever. spend crowns in the 🪙 shop on permanent meta-upgrades.</p>
+      </div>
     </div>
   </div>
 <script>
@@ -910,6 +928,11 @@ function buyShopItem(id) {
 shopBtnEl.addEventListener('click', () => { renderShop(); shopModalEl.classList.add('show'); });
 document.getElementById('shop-close').addEventListener('click', () => shopModalEl.classList.remove('show'));
 shopModalEl.addEventListener('click', (e) => { if (e.target === shopModalEl) shopModalEl.classList.remove('show'); });
+
+const helpModalEl = document.getElementById('help-modal');
+document.getElementById('help-btn').addEventListener('click', () => helpModalEl.classList.add('show'));
+document.getElementById('help-close').addEventListener('click', () => helpModalEl.classList.remove('show'));
+helpModalEl.addEventListener('click', (e) => { if (e.target === helpModalEl) helpModalEl.classList.remove('show'); });
 
 document.getElementById('reset').addEventListener('click', () => {
   if (!confirm('Reset all progress?')) return;
