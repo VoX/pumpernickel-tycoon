@@ -110,3 +110,36 @@ export function lastPriceOf(t) {
   if (owned <= 0) return 0;
   return Math.ceil(t.cost * Math.pow(t.costGrowth, owned - 1) * phaseTreatDiscount());
 }
+
+export function meetsRequirement(t) {
+  if (!t.requiresOwned) return true;
+  for (const id in t.requiresOwned) {
+    if ((state.owned[id] || 0) < t.requiresOwned[id]) return false;
+  }
+  return true;
+}
+
+// Pick the rate-upgrade with the best rate-gain per pumpernickel spent.
+// Mirrors bestRateBuy() in balance/simulate.js so auto-buy and manual play
+// converge on the same purchase order.
+export function bestRateBuy() {
+  let best = null, bestEff = 0;
+  for (const t of TREATS) {
+    if (t.max && (state.owned[t.id] || 0) >= t.max) continue;
+    if (!meetsRequirement(t)) continue;
+    let effRate = 0;
+    if (t.rate) effRate = t.rate;
+    if (t.synergyTarget) {
+      const targ = TREATS.find(x => x.id === t.synergyTarget);
+      const owned = state.owned[t.synergyTarget] || 0;
+      if (targ && owned > 0) {
+        const existingSynergy = synergyMultFor(t.synergyTarget) / (state.owned[t.id] > 0 ? t.synergyMult : 1);
+        effRate = (targ.rate * owned * existingSynergy) * (t.synergyMult - 1);
+      }
+    }
+    if (effRate <= 0) continue;
+    const eff = effRate / priceOf(t);
+    if (eff > bestEff) { bestEff = eff; best = t; }
+  }
+  return best;
+}

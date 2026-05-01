@@ -14,7 +14,8 @@ import { CROWN_SHOP_ITEMS } from './content/crown-shop.js';
 import { SFX, setMuted, isMuted } from './systems/audio.js';
 import { initPumpPhysics, bouncePump, fireAura, pumpClickImpulse } from './systems/physics.js';
 import { state, defaultState, replaceState, save, load, invalidatePassiveRate } from './systems/state.js';
-import { synergyMultFor, passiveRate, effectMultiplier, hasCrown, achievementBonus, crownBonus, gardenBonus, hasGardenChaosBoost, eventPaceFactor, pantheonMod, hasActiveBuff, globalMult, rate, priceOf, lastPriceOf, BURNT_CRUST_DRAIN_PCT } from './systems/rate.js';
+import { synergyMultFor, passiveRate, effectMultiplier, hasCrown, achievementBonus, crownBonus, gardenBonus, hasGardenChaosBoost, eventPaceFactor, pantheonMod, hasActiveBuff, globalMult, rate, priceOf, lastPriceOf, meetsRequirement, bestRateBuy, BURNT_CRUST_DRAIN_PCT } from './systems/rate.js';
+import { fmt } from './systems/util.js';
 import { currentPhase, phaseRateMult, phaseTapMult, phaseComboMult, phaseTreatDiscount } from './systems/phases.js';
 
 // Tunables that stay in main for now — phase 1c moves them to systems/.
@@ -74,13 +75,6 @@ let lastRenderedRate = -1;
 let lastStreakTier = -1;
 
 
-function fmt(n) {
-  n = Math.floor(n);
-  if (n < 1000) return String(n);
-  if (n < 1e6) return (n/1000).toFixed(2).replace(/\.?0+$/, '') + 'K';
-  if (n < 1e9) return (n/1e6).toFixed(2).replace(/\.?0+$/, '') + 'M';
-  return (n/1e9).toFixed(2).replace(/\.?0+$/, '') + 'B';
-}
 function sellOne(t) {
   const owned = state.owned[t.id] || 0;
   if (owned <= 0) return;
@@ -232,13 +226,6 @@ function buildTreatRows() {
   }
   refreshTreats();
 }
-function meetsRequirement(t) {
-  if (!t.requiresOwned) return true;
-  for (const id in t.requiresOwned) {
-    if ((state.owned[id] || 0) < t.requiresOwned[id]) return false;
-  }
-  return true;
-}
 function refreshTreats() {
   for (const t of TREATS) {
     const row = treatRowsById[t.id];
@@ -366,31 +353,6 @@ function buy(t) {
     setTimeout(() => row.el.classList.remove('buy-flash'), 400);
   }
   save(); renderCount(); refreshTreats(); refreshBakery(); checkAchievements();
-}
-// Pick the rate-upgrade with the best rate-gain per pumpernickel spent.
-// Mirrors bestRateBuy() in balance/simulate.js so auto-buy and manual play
-// converge on the same purchase order.
-function bestRateBuy() {
-  let best = null, bestEff = 0;
-  for (const t of TREATS) {
-    if (t.max && (state.owned[t.id] || 0) >= t.max) continue;
-    if (!meetsRequirement(t)) continue;
-    let effRate = 0;
-    if (t.rate) effRate = t.rate;
-    if (t.synergyTarget) {
-      const targ = TREATS.find(x => x.id === t.synergyTarget);
-      const owned = state.owned[t.synergyTarget] || 0;
-      if (targ && owned > 0) {
-        // Stack on top of synergies the player already owns on this baker.
-        const existingSynergy = synergyMultFor(t.synergyTarget) / (state.owned[t.id] > 0 ? t.synergyMult : 1);
-        effRate = (targ.rate * owned * existingSynergy) * (t.synergyMult - 1);
-      }
-    }
-    if (effRate <= 0) continue;
-    const eff = effRate / priceOf(t);
-    if (eff > bestEff) { bestEff = eff; best = t; }
-  }
-  return best;
 }
 
 function checkAchievements() {
