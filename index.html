@@ -62,7 +62,8 @@
   .topbtn { position: fixed; top: 10px; background: rgba(0,0,0,0.4); color: rgba(255,255,255,0.85); border: none; padding: 12px 14px; border-radius: 10px; font-size: 0.78rem; cursor: pointer; z-index: 50; min-height: 44px; min-width: 44px; }
   .topbtn:hover { color: #fff; background: rgba(0,0,0,0.6); }
   #ach-btn { left: 8px; }
-  #help-btn { right: 8px; font-size: 1rem; font-weight: 800; min-width: 44px; }
+  #help-btn { right: 60px; font-size: 1rem; font-weight: 800; min-width: 44px; }
+  #mute-btn { right: 8px; font-size: 1rem; min-width: 44px; }
   #ascend-btn { left: 50%; transform: translateX(-50%); background: linear-gradient(180deg, #d4a93a, #a87a18); color: #2d1810; font-weight: 800; }
   #ascend-btn:hover { background: linear-gradient(180deg, #ffd060, #c98a18); }
   #shop-btn { left: 8px; top: 62px; background: rgba(60,40,20,0.6); }
@@ -145,6 +146,7 @@
   <button class="topbtn" id="ascend-btn" aria-label="Ascend the Tinyclaw" hidden>👑 <span id="ascend-info">Ascend</span></button>
   <button class="topbtn" id="shop-btn" aria-label="Crown Shop" hidden>🪙 <span id="shop-info">Shop</span></button>
   <button class="topbtn" id="help-btn" aria-label="How to play">?</button>
+  <button class="topbtn" id="mute-btn" aria-label="Toggle sound">🔊</button>
   <button class="topbtn" id="reset" aria-label="Reset save">RESET</button>
   <div class="toast" id="toast"></div>
   <div class="event-banner" id="event-banner"></div>
@@ -387,6 +389,57 @@ function load() {
   state.lastTick = Date.now();
 }
 function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch {} }
+
+// SFX — Web Audio synth, no assets. AudioContext lazy-inits on first user
+// gesture (autoplay policy compliance). Mute persists in localStorage.
+const SFX_MUTE_KEY = 'pumpernickel_muted_v1';
+let muted = localStorage.getItem(SFX_MUTE_KEY) === '1';
+let audioCtx = null;
+function initAudio() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+    catch { audioCtx = null; }
+  }
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+function playTone(freq, dur = 60, type = 'sine', vol = 0.08) {
+  if (muted) return;
+  const ctx = initAudio();
+  if (!ctx) return;
+  const t0 = ctx.currentTime;
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(freq, t0);
+  g.gain.setValueAtTime(vol, t0);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur / 1000);
+  o.connect(g); g.connect(ctx.destination);
+  o.start(t0);
+  o.stop(t0 + dur / 1000 + 0.02);
+}
+function playSequence(notes, gap = 0) {
+  let delay = 0;
+  for (const n of notes) {
+    setTimeout(() => playTone(n.f, n.d || 60, n.t || 'sine', n.v || 0.08), delay);
+    delay += (n.d || 60) + gap;
+  }
+}
+const SFX = {
+  tap:    () => playTone(220, 28, 'sine', 0.04),
+  crit:   () => playTone(880, 90, 'triangle', 0.12),
+  buy:    () => playSequence([{ f: 660, d: 40, t: 'square', v: 0.06 }, { f: 880, d: 60, t: 'square', v: 0.06 }]),
+  ach:    () => playSequence([{ f: 523, d: 80, v: 0.1 }, { f: 659, d: 80, v: 0.1 }, { f: 784, d: 140, v: 0.1 }]),
+  golden: () => playSequence([{ f: 1200, d: 50, t: 'triangle', v: 0.1 }, { f: 1500, d: 50, t: 'triangle', v: 0.1 }, { f: 1800, d: 80, t: 'triangle', v: 0.1 }]),
+  ascend: () => { playTone(262, 700, 'sine', 0.1); playTone(330, 700, 'sine', 0.08); playTone(392, 700, 'sine', 0.06); },
+  buff:   () => playSequence([{ f: 330, d: 60, v: 0.06 }, { f: 440, d: 60, v: 0.06 }, { f: 587, d: 100, v: 0.07 }]),
+  debuff: () => playSequence([{ f: 330, d: 80, t: 'sawtooth', v: 0.06 }, { f: 220, d: 120, t: 'sawtooth', v: 0.07 }]),
+};
+function setMuted(v) {
+  muted = v;
+  localStorage.setItem(SFX_MUTE_KEY, v ? '1' : '0');
+  document.getElementById('mute-btn').textContent = v ? '🔇' : '🔊';
+}
 function fmt(n) {
   n = Math.floor(n);
   if (n < 1000) return String(n);
@@ -620,6 +673,7 @@ function buy(t) {
   if (t.instant) { state.count += t.instant; state.lifetime += t.instant; toast(`+${fmt(t.instant)} pumpernickels!`); }
   if (t.hatch) { state.hasEgg = true; toast('🐣 a small dragon hatched.'); }
   if (t.id === 'crowncake') { toast('👑 the kingdom kneels.'); setPumpEmoji(); }
+  SFX.buy();
   save(); renderCount(); refreshTreats(); refreshBakery(); checkAchievements();
 }
 // Pick the rate-upgrade with the best rate-gain per pumpernickel spent.
@@ -657,6 +711,7 @@ function checkAchievements() {
   if (any) {
     save(); renderAchPanel();
     achBtnEl.classList.remove('popped'); void achBtnEl.offsetWidth; achBtnEl.classList.add('popped');
+    SFX.ach();
   }
 }
 
@@ -698,6 +753,8 @@ function fireEvent() {
   else if (ev.kind === 'debuff' || (ev.kind === 'instant_pct' && ev.factor < 0)) state.buffsConsecutive = 0;
   const copy = streakHot ? ev.copy + ' (streak ×2!)' : ev.copy;
   showBanner(copy, ev.kind);
+  if (ev.kind === 'buff') SFX.buff();
+  else if (ev.kind === 'debuff') SFX.debuff();
   save(); renderCount(); renderEffects(); checkAchievements();
 }
 function scheduleNextEvent() {
@@ -735,6 +792,7 @@ goldenEl.addEventListener('pointerdown', (e) => {
   const gain = Math.max(Math.floor(baseRate * GOLDEN_BONUS_SECONDS), GOLDEN_BONUS_FALLBACK);
   state.count += gain; state.lifetime += gain;
   state.goldensClicked = (state.goldensClicked || 0) + 1;
+  SFX.golden();
   toast(`✨ golden pumpernickel! +${fmt(gain)}`);
   // Burst of crit-styled crumb particles at the click point.
   const r = goldenEl.getBoundingClientRect();
@@ -811,6 +869,7 @@ pumpEl.addEventListener('pointerdown', (e) => {
   }
   renderCount(); renderStreak(); refreshTreats(); checkAchievements();
   if (navigator.vibrate) navigator.vibrate(crit ? HAPTIC_CRIT_MS : HAPTIC_MS);
+  (crit ? SFX.crit : SFX.tap)();
 });
 
 // Achievements panel
@@ -875,6 +934,7 @@ document.getElementById('ascend-confirm').addEventListener('click', () => {
   ascendModalEl.classList.remove('show');
   const flash = document.getElementById('ascend-flash');
   flash.classList.remove('show'); void flash.offsetWidth; flash.classList.add('show');
+  SFX.ascend();
   toast(`✨ ascended. +${gain}👑 — total ${state.crowns}`);
   save(); renderCount(); refreshTreats(); refreshBakery(); renderAchPanel(); refreshAscend(); refreshShop();
 });
@@ -933,6 +993,9 @@ const helpModalEl = document.getElementById('help-modal');
 document.getElementById('help-btn').addEventListener('click', () => helpModalEl.classList.add('show'));
 document.getElementById('help-close').addEventListener('click', () => helpModalEl.classList.remove('show'));
 helpModalEl.addEventListener('click', (e) => { if (e.target === helpModalEl) helpModalEl.classList.remove('show'); });
+
+document.getElementById('mute-btn').addEventListener('click', () => setMuted(!muted));
+setMuted(muted);
 
 document.getElementById('reset').addEventListener('click', () => {
   if (!confirm('Reset all progress?')) return;
