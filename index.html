@@ -125,6 +125,16 @@ const TREATS = [
   { id: 'singularity',icon: '🌌', name: 'Bread Singularity',  desc: '+150K / sec, dense',     cost: 10000000,   costGrowth: 1.50, rate: 150000,   bobMs: 600 },
   { id: 'universe',   icon: '🪐', name: 'Loaf Universe',      desc: '+1M / sec, expanding',   cost: 75000000,   costGrowth: 1.55, rate: 1000000,  bobMs: 3000 },
   { id: 'tap2',       icon: '👆', name: 'Sharper Fingers',    desc: '+1 per tap',             cost: 50,         costGrowth: 2.0,  tapBonus: 1,    max: 25 },
+  // Synergies — each doubles a specific baker's rate. Hidden until threshold met.
+  { id: 's_apprentice', icon: '📖', name: 'Cookbook',           desc: 'apprentices know the recipes. x2 apprentice rate', cost: 1000,         costGrowth: 999, max: 1, synergyTarget: 'apprentice', synergyMult: 2, requiresOwned: { apprentice: 10 } },
+  { id: 's_oven',       icon: '🌿', name: 'Better Yeast',       desc: 'the dough rises with confidence. x2 oven rate',     cost: 7500,         costGrowth: 999, max: 1, synergyTarget: 'oven',       synergyMult: 2, requiresOwned: { oven: 10 } },
+  { id: 's_cow',        icon: '🌾', name: 'Premium Feed',       desc: 'the cows are happier. x2 cow rate',                  cost: 50000,        costGrowth: 999, max: 1, synergyTarget: 'cow',        synergyMult: 2, requiresOwned: { cow: 10 } },
+  { id: 's_wizard',     icon: '📜', name: 'Spell Tomes',        desc: 'wizard memorized more chants. x2 wizard rate',       cost: 400000,       costGrowth: 999, max: 1, synergyTarget: 'wizard',     synergyMult: 2, requiresOwned: { wizard: 10 } },
+  { id: 's_factory',    icon: '⚙️', name: 'Conveyor Upgrade',   desc: 'the line never stops. x2 factory rate',              cost: 3000000,      costGrowth: 999, max: 1, synergyTarget: 'factory',    synergyMult: 2, requiresOwned: { factory: 10 } },
+  { id: 's_mill',       icon: '💧', name: 'Hydraulic Press',    desc: 'water-powered grinding. x2 mill rate',               cost: 20000000,     costGrowth: 999, max: 1, synergyTarget: 'mill',       synergyMult: 2, requiresOwned: { mill: 10 } },
+  { id: 's_citadel',    icon: '🛡️', name: 'Reinforced Walls',  desc: 'the bread holds. x2 citadel rate',                   cost: 150000000,    costGrowth: 999, max: 1, synergyTarget: 'citadel',    synergyMult: 2, requiresOwned: { citadel: 10 } },
+  { id: 's_singularity',icon: '⚛️', name: 'Quantum Tuning',     desc: 'collapsed wave functions, increased dough density. x2', cost: 1000000000, costGrowth: 999, max: 1, synergyTarget: 'singularity',synergyMult: 2, requiresOwned: { singularity: 5 } },
+  { id: 's_universe',   icon: '✨', name: 'Cosmic Inflation',   desc: 'the universe expands faster. x2 universe rate',      cost: 7500000000,   costGrowth: 999, max: 1, synergyTarget: 'universe',   synergyMult: 2, requiresOwned: { universe: 5 } },
   { id: 'shower',     icon: '🌧️', name: 'Pumpernickel Rain', desc: 'Instant +1000',          cost: 250,        costGrowth: 2.5,  instant: 1000 },
   { id: 'shower2',    icon: '⛈️', name: 'Pumpernickel Storm', desc: 'Instant +50,000',       cost: 25000,      costGrowth: 2.5,  instant: 50000 },
   { id: 'egg',        icon: '🥚', name: 'Hatch a Tinyclaw',   desc: 'companion. occasionally winks.', cost: 50000, costGrowth: 999, max: 1, hatch: true },
@@ -245,7 +255,16 @@ function fmt(n) {
   return (n/1e9).toFixed(2).replace(/\.?0+$/, '') + 'B';
 }
 function passiveRate() {
-  return TREATS.filter(t => t.rate).reduce((s, t) => s + (t.rate * (state.owned[t.id] || 0)), 0);
+  let total = 0;
+  for (const t of TREATS) {
+    if (!t.rate) continue;
+    let mult = 1;
+    for (const s of TREATS) {
+      if (s.synergyTarget === t.id && (state.owned[s.id] || 0) > 0) mult *= s.synergyMult;
+    }
+    total += t.rate * (state.owned[t.id] || 0) * mult;
+  }
+  return total;
 }
 function effectMultiplier() {
   const now = Date.now();
@@ -347,15 +366,20 @@ function buildTreatRows() {
   }
   refreshTreats();
 }
+function meetsRequirement(t) {
+  if (!t.requiresOwned) return true;
+  for (const id in t.requiresOwned) {
+    if ((state.owned[id] || 0) < t.requiresOwned[id]) return false;
+  }
+  return true;
+}
 function refreshTreats() {
   for (const t of TREATS) {
     const row = treatRowsById[t.id];
     if (!row) continue;
     const owned = state.owned[t.id] || 0;
-    if (t.max && owned >= t.max) {
-      row.el.className = 'treat maxed';
-      continue;
-    }
+    if (t.max && owned >= t.max) { row.el.className = 'treat maxed'; continue; }
+    if (!meetsRequirement(t)) { row.el.className = 'treat maxed'; continue; }
     const price = priceOf(t);
     row.el.className = 'treat ' + (state.count >= price ? 'affordable' : 'locked');
     row.priceEl.textContent = fmt(price);

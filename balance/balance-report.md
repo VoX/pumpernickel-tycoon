@@ -15,11 +15,11 @@ milestone        | spam-tap    | steady-buy  | idle
 ## Final state at 24h
 
 ### spam-tap
-  count: 2.25e+11  rate: 25291543/s
-  owned: {"apprentice":68,"oven":55,"cow":48,"wizard":40,"factory":34,"mill":30,"citadel":26,"singularity":23,"universe":21}
+  count: 1.50e+11  rate: 55310186/s
+  owned: {"apprentice":73,"oven":59,"cow":51,"wizard":43,"factory":37,"mill":32,"citadel":28,"singularity":25,"universe":23,"s_apprentice":1,"s_oven":1,"s_cow":1,"s_wizard":1,"s_factory":1,"s_mill":1,"s_singularity":1,"s_universe":1,"s_citadel":1}
 ### steady-buy
-  count: 2.24e+11  rate: 25291543/s
-  owned: {"apprentice":68,"oven":55,"cow":48,"wizard":40,"factory":34,"mill":30,"citadel":26,"singularity":23,"universe":21}
+  count: 1.48e+11  rate: 55310186/s
+  owned: {"apprentice":73,"oven":59,"cow":51,"wizard":43,"factory":37,"mill":32,"citadel":28,"singularity":25,"universe":23,"s_apprentice":1,"s_oven":1,"s_cow":1,"s_wizard":1,"s_factory":1,"s_mill":1,"s_singularity":1,"s_universe":1,"s_citadel":1}
 ### idle
   count: 0.00e+0  rate: 0/s
   owned: {}

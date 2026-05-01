@@ -14,6 +14,15 @@ const TREATS = [
   { id: 'singularity', cost: 10000000,  costGrowth: 1.50, rate: 150000 },
   { id: 'universe',    cost: 75000000,  costGrowth: 1.55, rate: 1000000 },
   { id: 'tap2',        cost: 50,        costGrowth: 2.0,  tapBonus: 1, max: 25 },
+  { id: 's_apprentice', cost: 1000,       costGrowth: 999, max: 1, synergyTarget: 'apprentice', synergyMult: 2, requiresOwned: { apprentice: 10 } },
+  { id: 's_oven',       cost: 7500,       costGrowth: 999, max: 1, synergyTarget: 'oven',       synergyMult: 2, requiresOwned: { oven: 10 } },
+  { id: 's_cow',        cost: 50000,      costGrowth: 999, max: 1, synergyTarget: 'cow',        synergyMult: 2, requiresOwned: { cow: 10 } },
+  { id: 's_wizard',     cost: 400000,     costGrowth: 999, max: 1, synergyTarget: 'wizard',     synergyMult: 2, requiresOwned: { wizard: 10 } },
+  { id: 's_factory',    cost: 3000000,    costGrowth: 999, max: 1, synergyTarget: 'factory',    synergyMult: 2, requiresOwned: { factory: 10 } },
+  { id: 's_mill',       cost: 20000000,   costGrowth: 999, max: 1, synergyTarget: 'mill',       synergyMult: 2, requiresOwned: { mill: 10 } },
+  { id: 's_citadel',    cost: 150000000,  costGrowth: 999, max: 1, synergyTarget: 'citadel',    synergyMult: 2, requiresOwned: { citadel: 10 } },
+  { id: 's_singularity',cost: 1000000000, costGrowth: 999, max: 1, synergyTarget: 'singularity',synergyMult: 2, requiresOwned: { singularity: 5 } },
+  { id: 's_universe',   cost: 7500000000, costGrowth: 999, max: 1, synergyTarget: 'universe',   synergyMult: 2, requiresOwned: { universe: 5 } },
   { id: 'shower',      cost: 250,       costGrowth: 2.5,  instant: 1000 },
   { id: 'shower2',     cost: 25000,     costGrowth: 2.5,  instant: 50000 },
   { id: 'egg',         cost: 50000,     costGrowth: 999,  max: 1 },
@@ -27,7 +36,16 @@ function priceOf(t, owned) {
 }
 
 function passiveRate(state) {
-  return TREATS.filter(t => t.rate).reduce((s, t) => s + (t.rate * (state.owned[t.id] || 0)), 0);
+  let total = 0;
+  for (const t of TREATS) {
+    if (!t.rate) continue;
+    let mult = 1;
+    for (const s of TREATS) {
+      if (s.synergyTarget === t.id && (state.owned[s.id] || 0) > 0) mult *= s.synergyMult;
+    }
+    total += t.rate * (state.owned[t.id] || 0) * mult;
+  }
+  return total;
 }
 function tapAmount(state) {
   return 1 + TREATS.filter(t => t.tapBonus).reduce((s, t) => s + (t.tapBonus * (state.owned[t.id] || 0)), 0);
@@ -35,13 +53,27 @@ function tapAmount(state) {
 
 // Greedy buy: always buy the production-rate upgrade with the best
 // "rate gained per pumpernickel spent" at current price.
+function meetsReq(state, t) {
+  if (!t.requiresOwned) return true;
+  for (const id in t.requiresOwned) if ((state.owned[id] || 0) < t.requiresOwned[id]) return false;
+  return true;
+}
 function bestRateBuy(state) {
   let best = null, bestEfficiency = 0;
   for (const t of TREATS) {
-    if (!t.rate) continue;
     if (t.max && (state.owned[t.id] || 0) >= t.max) continue;
+    if (!meetsReq(state, t)) continue;
     const price = priceOf(t, state.owned[t.id] || 0);
-    const eff = t.rate / price;
+    let effRate = 0;
+    if (t.rate) effRate = t.rate;
+    if (t.synergyTarget) {
+      // Approximate: synergy gives mult-1 of the target's current contribution
+      const targ = TREATS.find(x => x.id === t.synergyTarget);
+      const owned = state.owned[t.synergyTarget] || 0;
+      if (targ && owned > 0) effRate = (targ.rate * owned) * (t.synergyMult - 1);
+    }
+    if (effRate <= 0) continue;
+    const eff = effRate / price;
     if (eff > bestEfficiency) { bestEfficiency = eff; best = t; }
   }
   return best;
