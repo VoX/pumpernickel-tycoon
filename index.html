@@ -575,6 +575,8 @@ function drainBanner() {
 function fireEvent() {
   if (passiveRate() === 0) return;
   const ev = EVENTS[Math.floor(Math.random() * EVENTS.length)];
+  // Buff streak: 3+ buffs in a row makes the next buff hit twice as hard.
+  const streakHot = ev.kind === 'buff' && state.buffsConsecutive >= 3;
   if (ev.kind === 'instant') {
     state.count = Math.max(0, state.count + ev.amount);
     if (ev.amount > 0) state.lifetime += ev.amount;
@@ -582,11 +584,13 @@ function fireEvent() {
     const delta = Math.floor(state.count * ev.factor);
     state.count = Math.max(0, state.count + delta);
   } else if (ev.kind === 'buff' || ev.kind === 'debuff') {
-    state.activeEffects.push({ id: ev.id, expiresAt: Date.now() + ev.duration, mult: ev.mult });
+    const mult = streakHot ? ev.mult * 2 : ev.mult;
+    state.activeEffects.push({ id: ev.id, expiresAt: Date.now() + ev.duration, mult });
   }
   if (ev.kind === 'buff') state.buffsConsecutive++;
   else if (ev.kind === 'debuff' || (ev.kind === 'instant_pct' && ev.factor < 0)) state.buffsConsecutive = 0;
-  showBanner(ev.copy, ev.kind);
+  const copy = streakHot ? ev.copy + ' (streak ×2!)' : ev.copy;
+  showBanner(copy, ev.kind);
   save(); renderCount(); checkAchievements();
 }
 function scheduleNextEvent() {
