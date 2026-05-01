@@ -17,6 +17,7 @@ import { state, defaultState, replaceState, save, load, invalidatePassiveRate } 
 import { synergyMultFor, passiveRate, effectMultiplier, hasCrown, achievementBonus, crownBonus, gardenBonus, hasGardenChaosBoost, eventPaceFactor, pantheonMod, hasActiveBuff, globalMult, rate, priceOf, lastPriceOf, meetsRequirement, bestRateBuy, BURNT_CRUST_DRAIN_PCT } from './systems/rate.js';
 import { fmt } from './systems/util.js';
 import { currentPhase, phaseRateMult, phaseTapMult, phaseComboMult, phaseTreatDiscount } from './systems/phases.js';
+import { pantheonSlot, pantheonUnslot } from './systems/pantheon.js';
 
 // Tunables that stay in main for now — phase 1c moves them to systems/.
 const COMBO_RESET_MS = 800;
@@ -1115,25 +1116,19 @@ function renderMarket() {
 // Tinyclaw Pantheon — slot 3 temperaments with weighted effects.
 const pantheonSlotsEl = document.getElementById('pantheon-slots');
 const pantheonPoolEl = document.getElementById('pantheon-pool');
-function pantheonSlot(slotIdx, tempId) {
-  if (slotIdx < 0 || slotIdx > 2) return;
-  // Cost a crumb if displacing an existing temperament, otherwise free.
+// pantheonSlot/pantheonUnslot live in systems/pantheon.js. UI wrappers below
+// add the toast + render call after the state mutation.
+function uiPantheonSlot(slotIdx, tempId) {
   const occupied = !!state.pantheon[slotIdx];
   if (occupied && (state.crumbs || 0) < PANTHEON_SWAP_COST) {
     toast(`swap costs ${PANTHEON_SWAP_COST} 🍞`);
     return;
   }
-  if (occupied) state.crumbs -= PANTHEON_SWAP_COST;
-  // Remove this temperament from any other slot first (no duplicates).
-  for (let i = 0; i < 3; i++) if (state.pantheon[i] === tempId) state.pantheon[i] = null;
-  state.pantheon[slotIdx] = tempId;
-  save(); renderPantheon(); refreshMenu();
+  if (pantheonSlot(slotIdx, tempId)) { renderPantheon(); refreshMenu(); }
 }
-function pantheonUnslot(slotIdx) {
-  if (slotIdx < 0 || slotIdx > 2) return;
-  if (!state.pantheon[slotIdx]) return;
-  state.pantheon[slotIdx] = null;
-  save(); renderPantheon(); refreshMenu();
+function uiPantheonUnslot(slotIdx) {
+  pantheonUnslot(slotIdx);
+  renderPantheon(); refreshMenu();
 }
 function renderPantheon() {
   if (!pantheonSlotsEl) return;
@@ -1149,7 +1144,7 @@ function renderPantheon() {
       <div class="slot-icon">${t ? t.icon : '○'}</div>
       <div class="slot-name-filled">${t ? t.name : 'empty'}</div>
     `;
-    if (t) slot.addEventListener('click', () => pantheonUnslot(i));
+    if (t) slot.addEventListener('click', () => uiPantheonUnslot(i));
     pantheonSlotsEl.appendChild(slot);
   }
   pantheonPoolEl.innerHTML = '';
@@ -1171,7 +1166,7 @@ function renderPantheon() {
       const unslotBtn = document.createElement('button');
       unslotBtn.className = 'slot-btn unslot';
       unslotBtn.textContent = 'unslot';
-      unslotBtn.addEventListener('click', () => pantheonUnslot(slottedAt));
+      unslotBtn.addEventListener('click', () => uiPantheonUnslot(slottedAt));
       actions.appendChild(unslotBtn);
     } else {
       for (let i = 0; i < 3; i++) {
@@ -1181,7 +1176,7 @@ function renderPantheon() {
         btn.textContent = PANTHEON_SLOT_NAMES[i].charAt(0); // H/M/B
         btn.title = `slot in ${PANTHEON_SLOT_NAMES[i]} (×${PANTHEON_SLOT_WEIGHTS[i]})${occupied ? ` — costs ${PANTHEON_SWAP_COST} 🍞` : ''}`;
         if (occupied && (state.crumbs || 0) < PANTHEON_SWAP_COST) btn.disabled = true;
-        btn.addEventListener('click', () => pantheonSlot(i, t.id));
+        btn.addEventListener('click', () => uiPantheonSlot(i, t.id));
         actions.appendChild(btn);
       }
     }
