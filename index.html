@@ -84,9 +84,13 @@
   .ach-row.locked { opacity: 0.45; }
   .ach-row .name { font-size: 0.88rem; font-weight: 700; }
   .ach-row .desc { font-size: 0.72rem; opacity: 0.7; margin-top: 1px; }
-  .shop-buy { border: none; border-radius: 8px; padding: 6px 10px; font-weight: 800; min-width: 64px; cursor: pointer; color: #2d1810; background: linear-gradient(180deg, #d4a93a, #a87a18); }
-  .shop-buy.owned { background: #446644; color: #cfe6cf; cursor: default; }
+  .shop-buy { border: none; border-radius: 10px; padding: 6px 10px; font-weight: 800; min-width: 64px; cursor: pointer; color: #2d1810; background: linear-gradient(180deg, #d4a93a, #a87a18); transition: background 0.2s, transform 0.1s; }
+  .shop-buy:active { transform: scale(0.96); }
+  .shop-buy.owned { background: #6b4a22; color: #ffd980; cursor: default; }
   .shop-buy:disabled:not(.owned) { background: rgba(80,60,40,0.5); color: #2d1810; cursor: default; }
+  .gold-btn { width: 100%; padding: 12px; background: linear-gradient(180deg, #d4a93a, #a87a18); color: #2d1810; border: none; border-radius: 10px; font-weight: 800; font-size: 0.95rem; cursor: pointer; transition: background 0.2s; }
+  .gold-btn:hover:not(:disabled) { background: linear-gradient(180deg, #ffd060, #c98a18); }
+  .gold-btn:disabled { opacity: 0.5; cursor: default; }
 
   /* Bakery — visual representation of owned production assets. */
   .bakery { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; max-width: 92vw; min-height: 46px; padding: 4px; }
@@ -106,7 +110,7 @@
   /* Ascend button pulse + ascend flash overlay. */
   #ascend-btn.pulse { animation: ascend-pulse 1.6s ease-in-out infinite; }
   @keyframes ascend-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255,210,80,0.7); } 50% { box-shadow: 0 0 14px 6px rgba(255,210,80,0.55); } }
-  .ascend-flash { position: fixed; inset: 0; background: radial-gradient(circle at center, rgba(255,240,180,0.95), rgba(255,200,80,0.6) 50%, rgba(0,0,0,0) 80%); z-index: 999; opacity: 0; pointer-events: none; }
+  .ascend-flash { position: fixed; inset: 0; background: radial-gradient(circle at center, rgba(255,217,128,0.92), rgba(212,169,58,0.55) 50%, rgba(0,0,0,0) 80%); z-index: 999; opacity: 0; pointer-events: none; }
   .ascend-flash.show { animation: ascend-flash 700ms ease-out forwards; }
   @keyframes ascend-flash { 0% { opacity: 0; } 25% { opacity: 1; } 100% { opacity: 0; } }
 </style>
@@ -152,7 +156,7 @@
       <div class="ach-title">👑 Ascend the Tinyclaw</div>
       <div class="ach-sub">trade your kingdom for crowns. each crown grants +5% rate forever.</div>
       <div id="ascend-detail" style="font-size: 0.9rem; line-height: 1.6; padding: 6px 4px;"></div>
-      <button id="ascend-confirm" style="margin-top: 12px; width: 100%; padding: 12px; background: linear-gradient(180deg, #d4a93a, #a87a18); color: #2d1810; border: none; border-radius: 10px; font-weight: 800; font-size: 0.95rem; cursor: pointer;">Ascend</button>
+      <button id="ascend-confirm" class="gold-btn" style="margin-top: 12px;">Ascend</button>
     </div>
   </div>
   <div class="ach-modal" id="shop-modal" role="dialog" aria-label="Crown Shop">
@@ -180,7 +184,7 @@ const TREATS = [
   // Synergies — each doubles a specific baker's rate. Hidden until threshold met.
   { id: 's_apprentice', icon: '📖', name: 'Cookbook',           desc: 'apprentices know the recipes. x2 apprentice rate', cost: 1000,         costGrowth: 999, max: 1, synergyTarget: 'apprentice', synergyMult: 2, requiresOwned: { apprentice: 10 } },
   { id: 's_oven',       icon: '🌿', name: 'Better Yeast',       desc: 'the dough rises with confidence. x2 oven rate',     cost: 7500,         costGrowth: 999, max: 1, synergyTarget: 'oven',       synergyMult: 2, requiresOwned: { oven: 10 } },
-  { id: 's_cow',        icon: '🌾', name: 'Premium Feed',       desc: 'the cows are happier. x2 cow rate',                  cost: 50000,        costGrowth: 999, max: 1, synergyTarget: 'cow',        synergyMult: 2, requiresOwned: { cow: 10 } },
+  { id: 's_cow',        icon: '🥗', name: 'Premium Feed',       desc: 'the cows are happier. x2 cow rate',                  cost: 50000,        costGrowth: 999, max: 1, synergyTarget: 'cow',        synergyMult: 2, requiresOwned: { cow: 10 } },
   { id: 's_wizard',     icon: '📜', name: 'Spell Tomes',        desc: 'wizard memorized more chants. x2 wizard rate',       cost: 400000,       costGrowth: 999, max: 1, synergyTarget: 'wizard',     synergyMult: 2, requiresOwned: { wizard: 10 } },
   { id: 's_factory',    icon: '⚙️', name: 'Conveyor Upgrade',   desc: 'the line never stops. x2 factory rate',              cost: 3000000,      costGrowth: 999, max: 1, synergyTarget: 'factory',    synergyMult: 2, requiresOwned: { factory: 10 } },
   { id: 's_mill',       icon: '💧', name: 'Hydraulic Press',    desc: 'water-powered grinding. x2 mill rate',               cost: 20000000,     costGrowth: 999, max: 1, synergyTarget: 'mill',       synergyMult: 2, requiresOwned: { mill: 10 } },
@@ -200,10 +204,10 @@ const TREATS = [
   // Synergy tier 3 — compounds with t1+t2 for ×24 effective. Late-game only.
   { id: 's3_apprentice', icon: '🎓', name: 'Doctorate Program',   desc: 'apprentices teach apprentices teaching apprentices. x4', cost: 150000,         costGrowth: 999, max: 1, synergyTarget: 'apprentice', synergyMult: 4, requiresOwned: { apprentice: 100 } },
   { id: 's3_oven',       icon: '🌋', name: 'Volcanic Forge',      desc: 'magma-fired stoneware. x4 oven rate',                   cost: 1100000,        costGrowth: 999, max: 1, synergyTarget: 'oven',       synergyMult: 4, requiresOwned: { oven: 100 } },
-  { id: 's3_cow',        icon: '🌌', name: 'Cosmic Pasture',      desc: 'cows graze on stardust. x4 cow rate',                   cost: 7500000,        costGrowth: 999, max: 1, synergyTarget: 'cow',        synergyMult: 4, requiresOwned: { cow: 100 } },
+  { id: 's3_cow',        icon: '🐃', name: 'Cosmic Pasture',      desc: 'cows graze on stardust. x4 cow rate',                   cost: 7500000,        costGrowth: 999, max: 1, synergyTarget: 'cow',        synergyMult: 4, requiresOwned: { cow: 100 } },
   { id: 's3_wizard',     icon: '🧝', name: 'Archmage Council',    desc: 'twelve wizards in concert. x4 wizard rate',             cost: 60000000,       costGrowth: 999, max: 1, synergyTarget: 'wizard',     synergyMult: 4, requiresOwned: { wizard: 100 } },
   { id: 's3_factory',    icon: '🛸', name: 'Anti-Gravity Lifts',  desc: 'mixers float frictionless. x4 factory rate',            cost: 450000000,      costGrowth: 999, max: 1, synergyTarget: 'factory',    synergyMult: 4, requiresOwned: { factory: 100 } },
-  { id: 's3_mill',       icon: '🌀', name: 'Cyclone Grinders',    desc: 'storm-powered grinding. x4 mill rate',                  cost: 3000000000,     costGrowth: 999, max: 1, synergyTarget: 'mill',       synergyMult: 4, requiresOwned: { mill: 100 } },
+  { id: 's3_mill',       icon: '🪨', name: 'Cyclone Grinders',    desc: 'storm-powered grinding. x4 mill rate',                  cost: 3000000000,     costGrowth: 999, max: 1, synergyTarget: 'mill',       synergyMult: 4, requiresOwned: { mill: 100 } },
   { id: 's3_citadel',    icon: '🏯', name: 'Sky Fortress',        desc: 'the citadel rises. x4 citadel rate',                    cost: 22500000000,    costGrowth: 999, max: 1, synergyTarget: 'citadel',    synergyMult: 4, requiresOwned: { citadel: 100 } },
   { id: 's3_singularity',icon: '♾️', name: 'Recursive Density',   desc: 'a loop of bread inside bread. x4',                      cost: 150000000000,   costGrowth: 999, max: 1, synergyTarget: 'singularity',synergyMult: 4, requiresOwned: { singularity: 50 } },
   { id: 's3_universe',   icon: '🪞', name: 'Mirror Dimensions',   desc: 'every universe reflected. x4 universe rate',            cost: 1100000000000,  costGrowth: 999, max: 1, synergyTarget: 'universe',   synergyMult: 4, requiresOwned: { universe: 50 } },
@@ -241,7 +245,7 @@ const EVENTS = [
 const ACHIEVEMENTS = [
   { id: 'first_tap', icon: '👇', name: 'first crumb',         desc: 'welcome to the gluten lifestyle.',                            check: s => s.totalTaps >= 1 },
   { id: 'tap_100',   icon: '✋', name: 'finger committed',     desc: 'wrist developing opinions.',                                  check: s => s.totalTaps >= 100 },
-  { id: 'k1',        icon: '🌾', name: 'first kilonickel',     desc: 'small bakery.',                                               check: s => s.lifetime >= 1000 },
+  { id: 'k1',        icon: '🪙', name: 'first kilonickel',     desc: 'small bakery.',                                               check: s => s.lifetime >= 1000 },
   { id: 'k100',      icon: '🥖', name: 'mid-game economy',     desc: 'regional bread power.',                                       check: s => s.lifetime >= 100000 },
   { id: 'm1',        icon: '🍞', name: 'megaloaf',             desc: 'carbohydrate hegemony.',                                      check: s => s.lifetime >= 1e6 },
   { id: 'first_baker', icon: '🧑‍🍳', name: 'hired help',     desc: 'they have questions about wages.',                            check: s => (s.owned.apprentice||0) >= 1 },
