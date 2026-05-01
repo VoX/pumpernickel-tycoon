@@ -4,18 +4,23 @@
 // No DOM, no localStorage — pure logic copy of the cost/rate model.
 
 const TREATS = [
-  { id: 'apprentice', cost: 10,    costGrowth: 1.18, rate: 1 },
-  { id: 'oven',       cost: 75,    costGrowth: 1.22, rate: 5 },
-  { id: 'cow',        cost: 500,   costGrowth: 1.25, rate: 25 },
-  { id: 'wizard',     cost: 4000,  costGrowth: 1.30, rate: 150 },
-  { id: 'factory',    cost: 30000, costGrowth: 1.35, rate: 1000 },
-  { id: 'tap2',       cost: 50,    costGrowth: 2.0,  tapBonus: 1, max: 25 },
-  { id: 'shower',     cost: 250,   costGrowth: 2.5,  instant: 1000 },
-  { id: 'egg',        cost: 50000, costGrowth: 999,  max: 1 },
-  { id: 'crowncake',  cost: 500000,costGrowth: 999,  max: 1 },
+  { id: 'apprentice',  cost: 10,        costGrowth: 1.18, rate: 1 },
+  { id: 'oven',        cost: 75,        costGrowth: 1.22, rate: 5 },
+  { id: 'cow',         cost: 500,       costGrowth: 1.25, rate: 25 },
+  { id: 'wizard',      cost: 4000,      costGrowth: 1.30, rate: 150 },
+  { id: 'factory',     cost: 30000,     costGrowth: 1.35, rate: 1000 },
+  { id: 'mill',        cost: 200000,    costGrowth: 1.40, rate: 5000 },
+  { id: 'citadel',     cost: 1500000,   costGrowth: 1.45, rate: 25000 },
+  { id: 'singularity', cost: 10000000,  costGrowth: 1.50, rate: 150000 },
+  { id: 'universe',    cost: 75000000,  costGrowth: 1.55, rate: 1000000 },
+  { id: 'tap2',        cost: 50,        costGrowth: 2.0,  tapBonus: 1, max: 25 },
+  { id: 'shower',      cost: 250,       costGrowth: 2.5,  instant: 1000 },
+  { id: 'shower2',     cost: 25000,     costGrowth: 2.5,  instant: 50000 },
+  { id: 'egg',         cost: 50000,     costGrowth: 999,  max: 1 },
+  { id: 'crowncake',   cost: 500000,    costGrowth: 999,  max: 1 },
 ];
 
-const MILESTONES = [1e3, 1e4, 1e5, 1e6, 5e6];
+const MILESTONES = [1e3, 1e4, 1e5, 1e6, 5e6, 1e8, 1e9];
 
 function priceOf(t, owned) {
   return Math.ceil(t.cost * Math.pow(t.costGrowth, owned));
