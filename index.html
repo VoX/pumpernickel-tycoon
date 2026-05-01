@@ -1155,6 +1155,8 @@ document.getElementById('ascend-confirm').addEventListener('click', () => {
     goldensClicked: state.goldensClicked || 0,
     hasEgg: !!state.hasEgg || !!shop.eternalEgg,
     startedAt: state.startedAt || Date.now(),
+    crumbs: state.crumbs || 0,
+    lastCrumbAt: state.lastCrumbAt || Date.now(),
   };
   state = Object.assign(defaultState(), carry);
   if (shop.reinforced) state.owned.apprentice = (state.owned.apprentice || 0) + 1;
