@@ -320,6 +320,7 @@ const CRIT_CHANCE = 0.05;          // 5% per tap
 const CRIT_MULT = 10;              // ×10 on crit
 const CRIT_CRUMB_BONUS = 6;        // extra crumbs on crit
 const ACH_BONUS_PER_UNLOCK = 0.01; // +1% rate per achievement
+const TAP_RATE_FACTOR = 0.005;     // base click value scales with 5ms of current rate
 const GOLDEN_MIN_MS = 60000;
 const GOLDEN_MAX_MS = 180000;
 const GOLDEN_LIFETIME_MS = 9000;
@@ -503,7 +504,8 @@ function comboTierIndex() {
 }
 function tapAmount() {
   const bonus = TREATS.filter(t => t.tapBonus).reduce((s, t) => s + (t.tapBonus * (state.owned[t.id] || 0)), 0);
-  return (1 + bonus) * comboTier() * globalMult();
+  const fromRate = passiveRate() * TAP_RATE_FACTOR;
+  return (1 + bonus + fromRate) * comboTier() * globalMult();
 }
 function priceOf(t) { return Math.ceil(t.cost * Math.pow(t.costGrowth, state.owned[t.id] || 0)); }
 function toast(msg) {

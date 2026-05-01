@@ -71,7 +71,9 @@ function passiveRate(state) {
   return total;
 }
 function tapAmount(state) {
-  return 1 + TREATS.filter(t => t.tapBonus).reduce((s, t) => s + (t.tapBonus * (state.owned[t.id] || 0)), 0);
+  const bonus = TREATS.filter(t => t.tapBonus).reduce((s, t) => s + (t.tapBonus * (state.owned[t.id] || 0)), 0);
+  const fromRate = passiveRate(state) * 0.005;
+  return 1 + bonus + fromRate;
 }
 
 // Greedy buy: always buy the production-rate upgrade with the best
