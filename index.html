@@ -920,20 +920,28 @@ function fireAura() {
   auraEl.classList.add('fire');
 }
 
-// Tap depth — sustained clicks push the bread back; lack of clicks decays.
+// Tap depth — 1D spring-damper physics. Each click adds velocity (impulse);
+// gravity (spring) pulls depth back to 0; drag damps the motion.
 let pumpDepth = 0;
-const PUSH_PER_CLICK = 0.18;
-const PUSH_MAX = 1.0;
-const PUSH_HALFLIFE_MS = 350;     // depth halves every 350ms when not clicked
-const PUSH_SCALE_AT_MAX = 0.70;   // pump shrinks to 70% at max depth
+let pumpVelocity = 0;
+const PUMP_SPRING = 60;            // depth-units / s² per depth unit (k)
+const PUMP_DRAG = 8;               // velocity damping coefficient (c)
+const PUMP_CLICK_IMPULSE = 2.0;    // velocity added per click (depth-units / s)
+const PUSH_MAX = 1.2;              // depth ceiling — bread can't be pushed past this
+const PUSH_SCALE_AT_MAX = 0.65;    // visual scale at max depth
 let pumpDepthLast = performance.now();
 function pumpDepthFrame(now) {
-  const dt = now - pumpDepthLast;
+  let dt = (now - pumpDepthLast) / 1000;
+  if (dt > 0.1) dt = 0.1; // clamp huge dt after tab-blur
   pumpDepthLast = now;
-  pumpDepth *= Math.pow(0.5, dt / PUSH_HALFLIFE_MS);
-  if (pumpDepth < 0.005) pumpDepth = 0;
-  const scale = 1 - pumpDepth * (1 - PUSH_SCALE_AT_MAX);
-  pumpEl.style.transform = pumpDepth > 0 ? `scale(${scale})` : '';
+  const accel = -PUMP_SPRING * pumpDepth - PUMP_DRAG * pumpVelocity;
+  pumpVelocity += accel * dt;
+  pumpDepth += pumpVelocity * dt;
+  if (pumpDepth < 0) { pumpDepth = 0; if (pumpVelocity < 0) pumpVelocity = 0; }
+  if (pumpDepth > PUSH_MAX) { pumpDepth = PUSH_MAX; if (pumpVelocity > 0) pumpVelocity = 0; }
+  const scale = 1 - (pumpDepth / PUSH_MAX) * (1 - PUSH_SCALE_AT_MAX);
+  const moving = pumpDepth > 0.001 || Math.abs(pumpVelocity) > 0.005;
+  pumpEl.style.transform = moving ? `scale(${scale})` : '';
   requestAnimationFrame(pumpDepthFrame);
 }
 requestAnimationFrame(pumpDepthFrame);
@@ -950,7 +958,7 @@ pumpEl.addEventListener('pointerdown', (e) => {
   const newTier = comboTierIndex();
   if (newTier > prevTier && newTier > 0) { fireAura(); toast(`🔥 streak ×${comboTier()}`); }
   bouncePump();
-  pumpDepth = Math.min(PUSH_MAX, pumpDepth + PUSH_PER_CLICK);
+  pumpVelocity += PUMP_CLICK_IMPULSE; // physics: click adds velocity, spring/drag handles the rest
 
   const crit = Math.random() < CRIT_CHANCE;
   const gain = Math.floor(tapAmount() * (crit ? CRIT_MULT : 1));
