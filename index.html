@@ -80,7 +80,7 @@
   /* Topbtn = corner-anchored fixed buttons. Header has padding to clear them. */
   .topbtn { position: fixed; top: calc(env(safe-area-inset-top) + 8px); background: rgba(0,0,0,0.4); color: rgba(255,255,255,0.85); border: none; padding: 12px 14px; border-radius: 10px; font-size: 0.78rem; cursor: pointer; z-index: 50; min-height: 44px; min-width: 44px; }
   .topbtn:hover { color: #fff; background: rgba(0,0,0,0.6); }
-  #ach-btn { left: 8px; }
+  #menu-btn { left: 8px; }
   #help-btn { right: 60px; font-size: 1rem; font-weight: 800; }
   #mute-btn { right: 8px; font-size: 1rem; }
   /* Reset hides bottom-right to avoid misclicks. */
@@ -91,8 +91,6 @@
   .header-actions:empty { margin: 0; }
   .header-btn { background: rgba(60,40,20,0.6); color: rgba(255,255,255,0.9); border: none; padding: 10px 14px; border-radius: 10px; font-size: 0.85rem; cursor: pointer; min-height: 40px; }
   .header-btn:hover { background: rgba(60,40,20,0.85); }
-  #ascend-btn { background: linear-gradient(180deg, #d4a93a, #a87a18); color: #2d1810; font-weight: 800; }
-  #ascend-btn:hover { background: linear-gradient(180deg, #ffd060, #c98a18); }
   .event-banner { position: fixed; top: calc(env(safe-area-inset-top) + 12px); left: 50%; transform: translateX(-50%) translateY(-20px); padding: 10px 16px; background: rgba(40,20,10,0.94); border: 1px solid rgba(255,220,180,0.35); border-radius: 10px; max-width: 90vw; font-size: 0.85rem; z-index: 200; opacity: 0; transition: opacity 0.3s, transform 0.3s; pointer-events: none; }
   .event-banner.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   .event-banner.kind-buff { border-color: rgba(120,200,120,0.6); }
@@ -150,12 +148,10 @@
   .golden.active { opacity: 1; pointer-events: auto; animation: golden-wiggle 1.4s cubic-bezier(0.5,1.4,0.4,1) infinite; }
   @keyframes golden-wiggle { 0%,100% { transform: rotate(-10deg) scale(1); } 50% { transform: rotate(10deg) scale(1.12); } }
 
-  /* Achievement unlock pop on trophy button. */
-  #ach-btn.popped { animation: ach-pop 700ms cubic-bezier(0.4,1.6,0.4,1); }
+  /* Menu button — pop on achievement unlock; pulse when ascension is earnable. */
+  #menu-btn.popped { animation: ach-pop 700ms cubic-bezier(0.4,1.6,0.4,1); }
   @keyframes ach-pop { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255,210,80,0); } 30% { transform: scale(1.25); box-shadow: 0 0 18px 6px rgba(255,210,80,0.7); } 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255,210,80,0); } }
-
-  /* Ascend button pulse + ascend flash overlay. */
-  #ascend-btn.pulse { animation: ascend-pulse 1.6s ease-in-out infinite; }
+  #menu-btn.pulse { animation: ascend-pulse 1.6s ease-in-out infinite; }
   @keyframes ascend-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255,210,80,0.7); } 50% { box-shadow: 0 0 14px 6px rgba(255,210,80,0.55); } }
   .ascend-flash { position: fixed; inset: 0; background: radial-gradient(circle at center, rgba(255,217,128,0.92), rgba(212,169,58,0.55) 50%, rgba(0,0,0,0) 80%); z-index: 999; opacity: 0; pointer-events: none; }
   .ascend-flash.show { animation: ascend-flash 700ms ease-out forwards; }
@@ -805,7 +801,7 @@ function priceOf(t) { return Math.ceil(t.cost * Math.pow(t.costGrowth, state.own
 function lastPriceOf(t) {
   const owned = state.owned[t.id] || 0;
   if (owned <= 0) return 0;
-  return Math.ceil(t.cost * Math.pow(t.costGrowth, owned - 1));
+  return Math.ceil(t.cost * Math.pow(t.costGrowth, owned - 1) * phaseTreatDiscount());
 }
 function sellOne(t) {
   const owned = state.owned[t.id] || 0;
@@ -1061,7 +1057,6 @@ function buy(t) {
   if (state.count < price) return;
   state.count -= price;
   state.owned[t.id] = (state.owned[t.id] || 0) + 1;
-  if (t.instant) { state.count += t.instant; state.lifetime += t.instant; toast(`+${fmt(t.instant)} pumpernickels!`); }
   if (t.doubleBank) {
     // Final bank = 2× pre-purchase bank. state.count just had `price` subtracted,
     // so add (pre + price) to land at 2*pre.
@@ -1125,6 +1120,8 @@ function checkAchievements() {
 let bannerQueue = [];
 let bannerShowing = false;
 function showBanner(text, kind) {
+  // Cap queue so background-tab pile-ups don't ambush the player on focus.
+  if (bannerQueue.length >= 5) bannerQueue.shift();
   bannerQueue.push({ text, kind });
   if (!bannerShowing) drainBanner();
 }
@@ -1663,8 +1660,10 @@ function harvestPlot(idx) {
       // Filter to species whose placement rules are satisfied at the target.
       const candidates = SPECIES.filter(s =>
         s.id !== 'voidmold' &&
-        !s.requiresAdjacent || neighborsOfSpecies(target, s.requiresAdjacent) > 0
-      ).filter(s => !s.needsEmptyNeighbors || emptyNeighbors(target) >= s.needsEmptyNeighbors);
+        (!s.requiresAdjacent || neighborsOfSpecies(target, s.requiresAdjacent) > 0) &&
+        (!s.needsEmptyNeighbors || emptyNeighbors(target) >= s.needsEmptyNeighbors) &&
+        (!s.requiresBuff || hasActiveBuff())
+      );
       if (candidates.length) {
         const hybrid = candidates[Math.floor(Math.random() * candidates.length)];
         state.garden[target].species = hybrid.id;
@@ -1784,7 +1783,6 @@ function renderGarden() {
 if (waterBtnEl) waterBtnEl.addEventListener('click', waterRandomPlot);
 
 // Yeast Market — commodity arbitrage. Prices fluctuate every 30s.
-const marketRowsEl = (() => null); // built lazily by renderMarket
 function updateMarketPrices() {
   const now = Date.now();
   if (now - (state.market.lastUpdateAt || 0) < MARKET_PRICE_UPDATE_MS) return;
@@ -2049,6 +2047,12 @@ setInterval(() => {
   refreshTreats();
   refreshAscend();
   checkAchievements();
+  // If a tab with live timers is open, refresh it so countdowns don't freeze.
+  if (menuModalEl.classList.contains('show')) {
+    if (activeTab === 'garden') renderGarden();
+    else if (activeTab === 'market') renderMarket();
+    else if (activeTab === 'ascend') openAscendPane();
+  }
 }, TICK_MS);
 setInterval(save, SAVE_INTERVAL_MS);
 window.addEventListener('beforeunload', save);
