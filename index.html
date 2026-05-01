@@ -810,10 +810,23 @@ function sellOne(t) {
   toast(`sold 1 ${t.name} · +${fmt(refund)}`);
   save(); renderCount(); refreshTreats(); refreshBakery();
 }
-function toast(msg) {
+// Toast queue — multiple acks within ~1s queue instead of clobbering. A flood
+// (eg. ascend with many achievements firing) caps at 4 pending so we don't
+// loop forever showing back-to-back toasts.
+let toastQueue = [];
+let toastShowing = false;
+function drainToast() {
+  if (!toastQueue.length) { toastShowing = false; return; }
+  toastShowing = true;
+  const msg = toastQueue.shift();
   const el = document.getElementById('toast');
   el.textContent = msg; el.classList.add('show');
-  clearTimeout(toast._t); toast._t = setTimeout(() => el.classList.remove('show'), TOAST_MS);
+  setTimeout(() => { el.classList.remove('show'); setTimeout(drainToast, 200); }, TOAST_MS);
+}
+function toast(msg) {
+  if (toastQueue.length >= 4) toastQueue.shift();
+  toastQueue.push(msg);
+  if (!toastShowing) drainToast();
 }
 function setPumpEmoji() {
   pumpEl.textContent = state.owned.crowncake ? '👑' : '🍞';
@@ -1779,9 +1792,26 @@ function renderGarden() {
       if (mature) {
         cell.addEventListener('click', () => harvestPlot(i));
       } else {
-        cell.addEventListener('click', () => {
-          if (confirm(`Uproot the ${sp.name}? Crumbs not refunded.`)) clearPlot(i);
+        // Tap on a non-mature plot shows status; long-press (500ms) uproots.
+        // Avoids the destructive native confirm dialog on every accidental tap.
+        let pressTimer = null, longFired = false;
+        cell.addEventListener('pointerdown', () => {
+          longFired = false;
+          pressTimer = setTimeout(() => {
+            longFired = true;
+            if (confirm(`Uproot the ${sp.name}? Crumbs not refunded.`)) clearPlot(i);
+          }, 500);
         });
+        const cancelPress = () => { clearTimeout(pressTimer); pressTimer = null; };
+        cell.addEventListener('pointerup', () => {
+          cancelPress();
+          if (!longFired) {
+            const minutes = Math.floor(remaining / 60000), seconds = Math.floor((remaining % 60000) / 1000);
+            toast(`${sp.name} · ${minutes}:${seconds.toString().padStart(2, '0')} left · long-press to uproot`);
+          }
+        });
+        cell.addEventListener('pointercancel', cancelPress);
+        cell.addEventListener('pointerleave', cancelPress);
       }
     }
     gardenGridEl.appendChild(cell);
@@ -1977,6 +2007,25 @@ const helpModalEl = document.getElementById('help-modal');
 document.getElementById('help-btn').addEventListener('click', () => helpModalEl.classList.add('show'));
 document.getElementById('help-close').addEventListener('click', () => helpModalEl.classList.remove('show'));
 helpModalEl.addEventListener('click', (e) => { if (e.target === helpModalEl) helpModalEl.classList.remove('show'); });
+
+// Escape key dismisses any open modal — desktop a11y expectation.
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  for (const m of [menuModalEl, helpModalEl]) {
+    if (m.classList.contains('show')) { m.classList.remove('show'); return; }
+  }
+  // Species picker is created on demand; close any open one.
+  if (speciesPickerEl && speciesPickerEl.parentNode) {
+    document.body.removeChild(speciesPickerEl);
+    speciesPickerEl = null;
+  }
+});
+
+// Suppress the iOS/Android long-press context menu on bakery chips so the
+// 500ms sell-back hold doesn't race with native image-save / text-select UI.
+document.addEventListener('contextmenu', (e) => {
+  if (e.target.closest('.asset')) e.preventDefault();
+});
 
 document.getElementById('mute-btn').addEventListener('click', () => setMuted(!muted));
 setMuted(muted);
