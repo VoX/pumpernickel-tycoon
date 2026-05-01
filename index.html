@@ -763,8 +763,10 @@ function pantheonMod(stat) {
   return mod;
 }
 function hasActiveBuff() {
+  // Any live effect counts (buff or debuff). Used by Dreamer's rateNoBuff
+  // penalty so it doesn't double-stack on top of an active debuff.
   const now = Date.now();
-  return (state.activeEffects || []).some(e => now < e.expiresAt && e.mult > 1);
+  return (state.activeEffects || []).some(e => now < e.expiresAt && e.mult !== 1);
 }
 function globalMult() {
   const baseMult = (1 + achievementBonus() + crownBonus() + gardenBonus()) * effectMultiplier() * phaseRateMult();
@@ -1809,9 +1811,8 @@ function sellCommodity(id) {
   if (held <= 0) return;
   state.market.holdings[id] = held - 1;
   state.count += price;
-  // Lifetime increments only if profit > average buy price (we don't track avg
-  // cost basis, so credit lifetime conservatively at 50% of sale price).
-  state.lifetime += Math.floor(price * 0.5);
+  // No lifetime credit on sale — without cost-basis tracking, crediting could
+  // inflate lifetime via buy/sell-same-tick loops. state.count is the truth.
   save(); renderCount(); renderMarket();
 }
 function buyMaxCommodity(id) {
@@ -1834,7 +1835,6 @@ function sellAllCommodity(id) {
   const held = state.market.holdings[id] || 0;
   if (held <= 0) return;
   state.count += held * price;
-  state.lifetime += Math.floor(held * price * 0.5);
   state.market.holdings[id] = 0;
   save(); renderCount(); renderMarket();
 }
@@ -1997,6 +1997,8 @@ setInterval(() => {
     state.lastCrumbAt += CRUMB_RIPEN_MS;
     toast(`🍞 a ripe crumb appeared. you have ${state.crumbs}.`);
   }
+  // Yeast Market — tick price refresh in the background even if modal is closed.
+  if (state.market) updateMarketPrices();
   // Burnt Crusts — accumulate drained value per-second for the pop payout.
   if (state.burntCrusts && state.burntCrusts.length > 0) {
     for (const c of state.burntCrusts) {
