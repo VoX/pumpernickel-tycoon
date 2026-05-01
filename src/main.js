@@ -1,102 +1,17 @@
-const TREATS = [
-  { id: 'apprentice', icon: '🧑‍🍳', name: 'Apprentice Baker', desc: '+1 / sec',                cost: 10,         costGrowth: 1.18, rate: 1,        bobMs: 1600 },
-  { id: 'oven',       icon: '🔥', name: 'Stone Oven',         desc: '+5 / sec, runs hot',     cost: 75,         costGrowth: 1.22, rate: 5,        bobMs: 1100 },
-  { id: 'cow',        icon: '🐄', name: 'Bread Cow',          desc: '+25 / sec, moos',        cost: 500,        costGrowth: 1.25, rate: 25,       bobMs: 1900 },
-  { id: 'wizard',     icon: '🧙', name: 'Pumpernickel Wizard',desc: '+150 / sec',             cost: 4000,       costGrowth: 1.30, rate: 150,      bobMs: 2400 },
-  { id: 'factory',    icon: '🏭', name: 'Bread Factory',      desc: '+1000 / sec',            cost: 30000,      costGrowth: 1.35, rate: 1000,     bobMs: 800 },
-  { id: 'mill',       icon: '🌾', name: 'Pumpernickel Mill',  desc: '+5000 / sec, grinds',    cost: 200000,     costGrowth: 1.40, rate: 5000,     bobMs: 1400 },
-  { id: 'citadel',    icon: '🏰', name: 'Bread Citadel',      desc: '+25K / sec, fortified',  cost: 1500000,    costGrowth: 1.45, rate: 25000,    bobMs: 2000 },
-  { id: 'singularity',icon: '🌌', name: 'Bread Singularity',  desc: '+150K / sec, dense',     cost: 10000000,   costGrowth: 1.50, rate: 150000,   bobMs: 600 },
-  { id: 'universe',   icon: '🪐', name: 'Loaf Universe',      desc: '+1M / sec, expanding',   cost: 75000000,   costGrowth: 1.55, rate: 1000000,  bobMs: 3000 },
-  { id: 'tap2',       icon: '👆', name: 'Sharper Fingers',    desc: '+1 per tap',             cost: 50,         costGrowth: 2.0,  tapBonus: 1,    max: 25 },
-  { id: 'tap3',       icon: '🤏', name: 'Calloused Pads',     desc: '+2 per tap',             cost: 5000,       costGrowth: 1.9,  tapBonus: 2,    max: 50 },
-  { id: 'tap4',       icon: '👊', name: 'Knuckle Power',      desc: '+5 per tap',             cost: 500000,     costGrowth: 1.85, tapBonus: 5,    max: 100 },
-  // Synergies — each doubles a specific baker's rate. Hidden until threshold met.
-  { id: 's_apprentice', icon: '📖', name: 'Cookbook',           desc: 'apprentices know the recipes. x2 apprentice rate', cost: 1000,         costGrowth: 999, max: 1, synergyTarget: 'apprentice', synergyMult: 2, requiresOwned: { apprentice: 10 } },
-  { id: 's_oven',       icon: '🌿', name: 'Better Yeast',       desc: 'the dough rises with confidence. x2 oven rate',     cost: 7500,         costGrowth: 999, max: 1, synergyTarget: 'oven',       synergyMult: 2, requiresOwned: { oven: 10 } },
-  { id: 's_cow',        icon: '🥗', name: 'Premium Feed',       desc: 'the cows are happier. x2 cow rate',                  cost: 50000,        costGrowth: 999, max: 1, synergyTarget: 'cow',        synergyMult: 2, requiresOwned: { cow: 10 } },
-  { id: 's_wizard',     icon: '📜', name: 'Spell Tomes',        desc: 'wizard memorized more chants. x2 wizard rate',       cost: 400000,       costGrowth: 999, max: 1, synergyTarget: 'wizard',     synergyMult: 2, requiresOwned: { wizard: 10 } },
-  { id: 's_factory',    icon: '⚙️', name: 'Conveyor Upgrade',   desc: 'the line never stops. x2 factory rate',              cost: 3000000,      costGrowth: 999, max: 1, synergyTarget: 'factory',    synergyMult: 2, requiresOwned: { factory: 10 } },
-  { id: 's_mill',       icon: '💧', name: 'Hydraulic Press',    desc: 'water-powered grinding. x2 mill rate',               cost: 20000000,     costGrowth: 999, max: 1, synergyTarget: 'mill',       synergyMult: 2, requiresOwned: { mill: 10 } },
-  { id: 's_citadel',    icon: '🛡️', name: 'Reinforced Walls',  desc: 'the bread holds. x2 citadel rate',                   cost: 150000000,    costGrowth: 999, max: 1, synergyTarget: 'citadel',    synergyMult: 2, requiresOwned: { citadel: 10 } },
-  { id: 's_singularity',icon: '⚛️', name: 'Quantum Tuning',     desc: 'collapsed wave functions, increased dough density. x2', cost: 1000000000, costGrowth: 999, max: 1, synergyTarget: 'singularity',synergyMult: 2, requiresOwned: { singularity: 5 } },
-  { id: 's_universe',   icon: '✨', name: 'Cosmic Inflation',   desc: 'the universe expands faster. x2 universe rate',      cost: 7500000000,   costGrowth: 999, max: 1, synergyTarget: 'universe',   synergyMult: 2, requiresOwned: { universe: 5 } },
-  // Synergy tier 2 — compounds with tier 1 (×6 effective). Higher unlock thresholds.
-  { id: 's2_apprentice', icon: '📚', name: 'Master Curriculum',  desc: 'each apprentice mentors a junior. x3 apprentice rate', cost: 12000,         costGrowth: 999, max: 1, synergyTarget: 'apprentice', synergyMult: 3, requiresOwned: { apprentice: 25 } },
-  { id: 's2_oven',       icon: '🪵', name: 'Hardwood Fuel',      desc: 'oak burns hotter. x3 oven rate',                       cost: 90000,         costGrowth: 999, max: 1, synergyTarget: 'oven',       synergyMult: 3, requiresOwned: { oven: 25 } },
-  { id: 's2_cow',        icon: '🐂', name: 'Bovine Genetics',    desc: 'selectively bred for output. x3 cow rate',             cost: 600000,        costGrowth: 999, max: 1, synergyTarget: 'cow',        synergyMult: 3, requiresOwned: { cow: 25 } },
-  { id: 's2_wizard',     icon: '🔮', name: 'Crystal Focus',      desc: 'amplifies the chants. x3 wizard rate',                 cost: 5000000,       costGrowth: 999, max: 1, synergyTarget: 'wizard',     synergyMult: 3, requiresOwned: { wizard: 25 } },
-  { id: 's2_factory',    icon: '🤖', name: 'Robotic Mixers',     desc: 'no breaks, no complaints. x3 factory rate',            cost: 36000000,      costGrowth: 999, max: 1, synergyTarget: 'factory',    synergyMult: 3, requiresOwned: { factory: 25 } },
-  { id: 's2_mill',       icon: '⛰️', name: 'Granite Wheels',    desc: 'they grind anything. x3 mill rate',                    cost: 240000000,     costGrowth: 999, max: 1, synergyTarget: 'mill',       synergyMult: 3, requiresOwned: { mill: 25 } },
-  { id: 's2_citadel',    icon: '⚔️', name: 'Garrisoned Bakers', desc: 'they defend the recipe. x3 citadel rate',              cost: 1800000000,    costGrowth: 999, max: 1, synergyTarget: 'citadel',    synergyMult: 3, requiresOwned: { citadel: 25 } },
-  { id: 's2_singularity',icon: '🌀', name: 'Event Horizon',      desc: 'collapses time around the dough. x3',                  cost: 12000000000,   costGrowth: 999, max: 1, synergyTarget: 'singularity',synergyMult: 3, requiresOwned: { singularity: 15 } },
-  { id: 's2_universe',   icon: '🌠', name: 'Multiverse Yield',   desc: 'harvest every parallel loaf. x3 universe rate',        cost: 90000000000,   costGrowth: 999, max: 1, synergyTarget: 'universe',   synergyMult: 3, requiresOwned: { universe: 15 } },
-  // Synergy tier 3 — compounds with t1+t2 for ×24 effective. Late-game only.
-  { id: 's3_apprentice', icon: '🎓', name: 'Doctorate Program',   desc: 'apprentices teach apprentices teaching apprentices. x4', cost: 150000,         costGrowth: 999, max: 1, synergyTarget: 'apprentice', synergyMult: 4, requiresOwned: { apprentice: 100 } },
-  { id: 's3_oven',       icon: '🌋', name: 'Volcanic Forge',      desc: 'magma-fired stoneware. x4 oven rate',                   cost: 1100000,        costGrowth: 999, max: 1, synergyTarget: 'oven',       synergyMult: 4, requiresOwned: { oven: 100 } },
-  { id: 's3_cow',        icon: '🐃', name: 'Cosmic Pasture',      desc: 'cows graze on stardust. x4 cow rate',                   cost: 7500000,        costGrowth: 999, max: 1, synergyTarget: 'cow',        synergyMult: 4, requiresOwned: { cow: 100 } },
-  { id: 's3_wizard',     icon: '🧝', name: 'Archmage Council',    desc: 'twelve wizards in concert. x4 wizard rate',             cost: 60000000,       costGrowth: 999, max: 1, synergyTarget: 'wizard',     synergyMult: 4, requiresOwned: { wizard: 100 } },
-  { id: 's3_factory',    icon: '🛸', name: 'Anti-Gravity Lifts',  desc: 'mixers float frictionless. x4 factory rate',            cost: 450000000,      costGrowth: 999, max: 1, synergyTarget: 'factory',    synergyMult: 4, requiresOwned: { factory: 100 } },
-  { id: 's3_mill',       icon: '🪨', name: 'Cyclone Grinders',    desc: 'storm-powered grinding. x4 mill rate',                  cost: 3000000000,     costGrowth: 999, max: 1, synergyTarget: 'mill',       synergyMult: 4, requiresOwned: { mill: 100 } },
-  { id: 's3_citadel',    icon: '🏯', name: 'Sky Fortress',        desc: 'the citadel rises. x4 citadel rate',                    cost: 22500000000,    costGrowth: 999, max: 1, synergyTarget: 'citadel',    synergyMult: 4, requiresOwned: { citadel: 100 } },
-  { id: 's3_singularity',icon: '♾️', name: 'Recursive Density',   desc: 'a loop of bread inside bread. x4',                      cost: 150000000000,   costGrowth: 999, max: 1, synergyTarget: 'singularity',synergyMult: 4, requiresOwned: { singularity: 50 } },
-  { id: 's3_universe',   icon: '🪞', name: 'Mirror Dimensions',   desc: 'every universe reflected. x4 universe rate',            cost: 1100000000000,  costGrowth: 999, max: 1, synergyTarget: 'universe',   synergyMult: 4, requiresOwned: { universe: 50 } },
-  // Instant boosts — one-time each, doubles your current bank.
-  { id: 'shower',     icon: '🌧️', name: 'Pumpernickel Rain',  desc: 'one-time. doubles your current pumpernickels.', cost: 1000,         costGrowth: 999, max: 1, doubleBank: true, requiresOwned: { apprentice: 1 } },
-  { id: 'shower2',    icon: '⛈️', name: 'Pumpernickel Storm', desc: 'one-time. doubles your current pumpernickels.', cost: 100000,       costGrowth: 999, max: 1, doubleBank: true, requiresOwned: { oven: 5 } },
-  { id: 'shower3',    icon: '🌊', name: 'Pumpernickel Flood', desc: 'one-time. doubles your current pumpernickels.', cost: 5000000,      costGrowth: 999, max: 1, doubleBank: true, requiresOwned: { cow: 10 } },
-  { id: 'shower4',    icon: '☄️', name: 'Pumpernickel Comet', desc: 'one-time. doubles your current pumpernickels.', cost: 250000000,    costGrowth: 999, max: 1, doubleBank: true, requiresOwned: { wizard: 10 } },
-  { id: 'shower5',    icon: '🌠', name: 'Pumpernickel Nova',  desc: 'one-time. doubles your current pumpernickels.', cost: 10000000000,  costGrowth: 999, max: 1, doubleBank: true, requiresOwned: { factory: 10 } },
-  { id: 'egg',        icon: '🥚', name: 'Hatch a Tinyclaw',   desc: 'companion. occasionally winks.', cost: 50000, costGrowth: 999, max: 1, hatch: true },
-  { id: 'crowncake',  icon: '👑', name: 'Crown of the Tinyclaw', desc: 'a treat fit for a small dragon', cost: 500000, costGrowth: 999, max: 1 },
-  // Repurchasable insurance — consumed on the next debuff event.
-  { id: 'insurance',  icon: '☂️', name: 'Yeast Insurance',     desc: 'consumes itself to block the next debuff event.', cost: 5000, costGrowth: 1.8, requiresOwned: { apprentice: 5 } },
-];
+// Pumpernickel Tycoon — main entry. Imports content modules and provides
+// game logic + UI render in a single script (Phase 1 module split — content
+// extracted to src/content/, system + ui split coming in 1c/1d).
+import { TREATS } from './content/treats.js';
+import { EVENTS } from './content/events.js';
+import { ACHIEVEMENTS } from './content/achievements.js';
+import { GOLDEN_BUFFS } from './content/golden-buffs.js';
+import { MARKET_THRESHOLD, MARKET_PRICE_UPDATE_MS, MARKET_HOLDING_CAP, COMMODITIES } from './content/commodities.js';
+import { PANTHEON_SLOT_WEIGHTS, PANTHEON_SLOT_NAMES, PANTHEON_SWAP_COST, TEMPERAMENTS } from './content/temperaments.js';
+import { PHASES } from './content/phases.js';
+import { GARDEN_PLOT_COUNT, GARDEN_GRID_SIZE, GARDEN_BARLEY_BONUS, GARDEN_BARLEY_CAP, GARDEN_POLLINATE_CHANCE, GARDEN_WATER_COST, SPECIES } from './content/species.js';
+import { CROWN_SHOP_ITEMS } from './content/crown-shop.js';
 
-const EVENTS = [
-  { id: 'cow_runs',       copy: 'the bread cow ran off. -50% rate for 30s',           kind: 'debuff',      duration: 30000, mult: 0.5 },
-  { id: 'tinyclaw_help',  copy: 'tinyclaw stopped by and helped knead. x5 rate for 15s', kind: 'buff',     duration: 15000, mult: 5 },
-  { id: 'tip',            copy: 'a customer tipped. unclear why. +250',                kind: 'instant',     amount: 250 },
-  { id: 'oven_hot',       copy: 'the oven runs hot. x2 rate for 20s',                 kind: 'buff',        duration: 20000, mult: 2 },
-  { id: 'tinyclaw_steal', copy: 'tinyclaw appeared and ate 10% of the stockpile',     kind: 'instant_pct', factor: -0.10 },
-  { id: 'wizard_chant',   copy: 'the wizard chanted something. +500',                 kind: 'instant',     amount: 500 },
-  { id: 'cow_returns',    copy: 'the bread cow returned with friends. x3 for 25s',    kind: 'buff',        duration: 25000, mult: 3 },
-  { id: 'mouse',          copy: 'a mouse. -100. unsurprising.',                       kind: 'instant',     amount: -100 },
-  { id: 'union',          copy: 'the apprentices unionized. wages up. -25% for 40s',  kind: 'debuff',      duration: 40000, mult: 0.75 },
-  { id: 'happy_hour',     copy: 'happy hour. x4 rate for 10s. brief but loud.',       kind: 'buff',        duration: 10000, mult: 4 },
-  { id: 'transmute',      copy: 'the wizard transmuted lead into bread. +1000',       kind: 'instant',     amount: 1000 },
-  { id: 'factory_break',  copy: 'the factory broke a belt. -10% rate for 60s',        kind: 'debuff',      duration: 60000, mult: 0.9 },
-  { id: 'tinyclaw_drop',  copy: 'tinyclaw misjudged a swoop. dropped 200. yours now.', kind: 'instant',    amount: 200 },
-  { id: 'sourdough',      copy: 'the starter is unusually active. x2 for 30s',         kind: 'buff',        duration: 30000, mult: 2 },
-  { id: 'golden_storm',   copy: 'a storm of golden pumpernickels. x10 for 10s',         kind: 'buff',        duration: 10000, mult: 10 },
-  { id: 'wizard_summon',  copy: 'the wizard summoned a baguette demon. +2000',          kind: 'instant',     amount: 2000 },
-  { id: 'bread_riot',     copy: 'the apprentices are unionizing harder. -30% for 40s',  kind: 'debuff',      duration: 40000, mult: 0.7 },
-  { id: 'citadel_siege',  copy: 'the citadel is besieged. defense rations. x4 for 20s', kind: 'buff',        duration: 20000, mult: 4 },
-  { id: 'flour_dust',     copy: 'a flour dust explosion. +5% to your bank.',            kind: 'instant_pct', factor: 0.05 },
-  { id: 'cosmic_align',   copy: 'cosmic alignment. wizards weep. x8 for 8s',            kind: 'buff',        duration: 8000,  mult: 8 },
-  { id: 'strawberry_cow', copy: 'a strawberry cow wandered in. she winked. x5 for 14s', kind: 'buff',        duration: 14000, mult: 5 },
-];
-
-const ACHIEVEMENTS = [
-  { id: 'first_tap', icon: '👇', name: 'first crumb',         desc: 'welcome to the gluten lifestyle.',                            check: s => s.totalTaps >= 1 },
-  { id: 'tap_100',   icon: '✋', name: 'finger committed',     desc: 'wrist developing opinions.',                                  check: s => s.totalTaps >= 100 },
-  { id: 'k1',        icon: '🪙', name: 'first kilonickel',     desc: 'small bakery.',                                               check: s => s.lifetime >= 1000 },
-  { id: 'k100',      icon: '🥖', name: 'mid-game economy',     desc: 'regional bread power.',                                       check: s => s.lifetime >= 100000 },
-  { id: 'm1',        icon: '🍞', name: 'megaloaf',             desc: 'carbohydrate hegemony.',                                      check: s => s.lifetime >= 1e6 },
-  { id: 'first_baker', icon: '🧑‍🍳', name: 'hired help',     desc: 'they have questions about wages.',                            check: s => (s.owned.apprentice||0) >= 1 },
-  { id: 'cow',       icon: '🐄', name: 'mooo',                 desc: 'ethically ambiguous but productive.',                         check: s => (s.owned.cow||0) >= 1 },
-  { id: 'wizard',    icon: '🧙', name: 'arcane bakery',        desc: 'union rules unclear.',                                        check: s => (s.owned.wizard||0) >= 1 },
-  { id: 'streak_25', icon: '🔥', name: 'sharp tap',            desc: 'impressive wrist.',                                            check: s => s.longestStreak >= 25 },
-  { id: 'streak_50', icon: '⚡', name: 'speed demon',          desc: 'genuinely concerning.',                                        check: s => s.longestStreak >= 50 },
-  { id: 'lucky',     icon: '🍀', name: 'got lucky',            desc: 'three buffs in a row. statistically suspicious.',             check: s => s.buffsConsecutive >= 3 },
-  { id: 'long_haul', icon: '⏳', name: 'long haul',            desc: 'played for 24 hours. hello.',                                 check: s => (Date.now() - s.startedAt) >= 24*3600*1000 },
-  { id: 'late_game', icon: '🪐', name: 'cosmic baker',         desc: 'owned a Loaf Universe. concerning scale.',                    check: s => (s.owned.universe||0) >= 1 },
-  { id: 'crown',     icon: '👑', name: 'crowned',              desc: 'the kingdom kneels.',                                          check: s => (s.owned.crowncake||0) >= 1 },
-  { id: 'egg',       icon: '🐣', name: 'eggcellent decision',  desc: 'she winks at you sometimes.',                                  check: s => s.hasEgg === true, hidden: true },
-  { id: 'crits_10',  icon: '✦', name: 'rare hit',             desc: 'ten critical taps. statistically allowed.',                   check: s => (s.criticalTaps || 0) >= 10, hidden: true },
-];
-
-// Tunables — change these to retune balance.
+// Tunables that stay in main for now — phase 1c moves them to systems/.
 const SAVE_KEY = 'pumpernickel-save-v2';
 const SAVE_KEY_V1 = 'pumpernickel-save-v1';
 const COMBO_RESET_MS = 800;
@@ -135,83 +50,21 @@ const GOLDEN_BONUS_SECONDS = 180;        // 3 minutes of rate per golden
 const GOLDEN_BONUS_FALLBACK = 100;       // floor for early game when rate=0
 const GOLDEN_BUFF_DURATION_MIN = 12000;  // random buff also fires on tap
 const GOLDEN_BUFF_DURATION_MAX = 30000;
-const GOLDEN_BUFFS = [
-  { id: 'g_frenzy',    copy: 'frenzy! x7 rate',           mult: 7 },
-  { id: 'g_lucky',     copy: 'lucky streak. x3 rate',     mult: 3 },
-  { id: 'g_double',    copy: 'double or nothing. x2',     mult: 2 },
-  { id: 'g_overdrive', copy: 'overdrive. x10 rate',       mult: 10 },
-  { id: 'g_fizzle',    copy: 'fizzle. x1.5 (it tried.)',  mult: 1.5 },
-];
 const CRUMB_RIPEN_MS = 60 * 60 * 1000;  // ripe crumb every 1 hour real-time
 const PHASE_DURATION_MS = 30 * 60 * 1000; // each sourdough phase lasts ~30 min of play
-// Yeast Market — 5 commodities, prices fluctuate every 30s, influenced by your
-// bakery composition. Unlocks at 1T lifetime baked total.
-const MARKET_THRESHOLD = 1e12;
-const MARKET_PRICE_UPDATE_MS = 30000;
-const MARKET_HOLDING_CAP = 1000;
-const COMMODITIES = [
-  { id: 'flour',  icon: '🌾', name: 'Flour',  basePrice: 100,    bakerInfluence: 'mill' },
-  { id: 'salt',   icon: '🧂', name: 'Salt',   basePrice: 500,    bakerInfluence: 'oven' },
-  { id: 'butter', icon: '🧈', name: 'Butter', basePrice: 2500,   bakerInfluence: 'cow' },
-  { id: 'sugar',  icon: '🍬', name: 'Sugar',  basePrice: 12500,  bakerInfluence: 'wizard' },
-  { id: 'yeast',  icon: '🫧', name: 'Yeast',  basePrice: 60000,  bakerInfluence: 'apprentice' },
-];
-// Tinyclaw Pantheon — 3 weighted slots × 6 temperaments. Each has tradeoffs.
-const PANTHEON_SLOT_WEIGHTS = [1.5, 1.0, 0.5]; // heart, mind, belly
-const PANTHEON_SLOT_NAMES = ['Heart', 'Mind', 'Belly'];
-const PANTHEON_SWAP_COST = 1; // crumbs per swap
-const TEMPERAMENTS = [
-  { id: 'hungry',  icon: '😋', name: 'Hungry',  desc: '+30% baker rate · -20% tap value', mods: { rate: 0.30, tap: -0.20 } },
-  { id: 'lazy',    icon: '😴', name: 'Lazy',    desc: '+50% offline gain · -15% buff duration', mods: { offline: 0.50, buffDuration: -0.15 } },
-  { id: 'greedy',  icon: '🤑', name: 'Greedy',  desc: '+50% instant amounts · -10% rate while tapping', mods: { instantAmount: 0.50, rate: -0.10 } },
-  { id: 'cunning', icon: '🧐', name: 'Cunning', desc: '+30% golden frequency · -15% buff strength', mods: { goldenFreq: 0.30, buffStrength: -0.15 } },
-  { id: 'stout',   icon: '💪', name: 'Stout',   desc: '+25% combo bonus · -30% crit chance', mods: { combo: 0.25, crit: -0.30 } },
-  { id: 'dreamer', icon: '🌙', name: 'Dreamer', desc: '+50% achievement bonus · -15% no-buff rate', mods: { achBonus: 0.50, rateNoBuff: -0.15 } },
-];
 const BURNT_CRUST_THRESHOLD = 1e9;        // unlocks at 1B lifetime
 const BURNT_CRUST_MIN_MS = 5 * 60 * 1000; // 5min between attempts
 const BURNT_CRUST_MAX_MS = 15 * 60 * 1000;
 const BURNT_CRUST_DRAIN_PCT = 0.05;       // 5% of baker rate while attached
 const BURNT_CRUST_PAYOUT_MULT = 1.10;     // pop pays 110% of drained
 const BURNT_CRUST_MAX = 3;                // cap active crusts
-const PHASES = [
-  { id: 'knead', icon: '✊', name: 'Knead',  desc: 'longer combos. streak decay halved.',                  comboMult: 1.25, streakDecayMult: 2 },
-  { id: 'rise',  icon: '🫧', name: 'Rise',   desc: '+50% passive rate, but tap value -50%.',                rateMult: 1.5, tapMult: 0.5 },
-  { id: 'bake',  icon: '🔥', name: 'Bake',   desc: 'buff events fire 2× often. debuffs are blocked.',       buffPace: 0.5, blockDebuffs: true },
-  { id: 'cool',  icon: '❄️', name: 'Cool',  desc: 'chaos events suspended. every 60s, bank +10%.',          suspendEvents: true, bankBonusEvery: 60, bankBonusPct: 0.10 },
-  { id: 'stale', icon: '🥖', name: 'Stale',  desc: 'production -25%, but treats are 50% off.',              rateMult: 0.75, treatDiscount: 0.5 },
-];
-// Yeast Garden — 3x3 grid of plots, 6 species, harvest = various rewards.
-const GARDEN_PLOT_COUNT = 9;
-const GARDEN_GRID_SIZE = 3;
-const GARDEN_BARLEY_BONUS = 0.005;       // +0.5% per harvest
-const GARDEN_BARLEY_CAP = 0.10;          // capped at +10% global
-const GARDEN_POLLINATE_CHANCE = 0.05;    // per matching neighbor on harvest
-const GARDEN_WATER_COST = 1000;          // pumpernickels per use
-const SPECIES = [
-  { id: 'sourdough',  icon: '🌾', name: 'Active Sourdough', desc: 'fast, free. +25% rate buff (5min).',                     growMs: 5*60*1000,  cost: 0, buffMult: 1.25, buffMs: 5*60*1000 },
-  { id: 'hops',       icon: '🍃', name: 'Hops',             desc: 'wants 2 empty neighbors. +50% chaos pace (30min).',       growMs: 10*60*1000, cost: 1, needsEmptyNeighbors: 2, chaosPaceMs: 30*60*1000, chaosPaceMult: 1.5 },
-  { id: 'barley',     icon: '🌿', name: 'Malted Barley',    desc: 'slow grow, permanent +0.5% rate (cap +10%).',             growMs: 60*60*1000, cost: 2, permanentBonus: GARDEN_BARLEY_BONUS },
-  { id: 'tinyclaw',   icon: '🍄', name: 'Tinyclaw Weed',    desc: 'plant adjacent to sourdough. spawns a golden 🥯.',         growMs: 15*60*1000, cost: 1, requiresAdjacent: 'sourdough', spawnsGolden: true },
-  { id: 'stardust',   icon: '✨', name: 'Stardust Grain',   desc: 'only matures during a buff. harvest = +1 👑.',            growMs: 20*60*1000, cost: 3, requiresBuff: true, crownReward: 1 },
-  { id: 'voidmold',   icon: '🦠', name: 'Void Mold',        desc: 'destroys 4 cardinal neighbors. ×3 rate buff (3min).',     growMs: 30*60*1000, cost: 1, destroysNeighbors: true, buffMult: 3, buffMs: 3*60*1000 },
-];
 const ASCEND_THRESHOLD = 1e9;       // 1B lifetime to unlock first ascension
 const CROWN_DIVISOR = 1e9;          // crowns earned = floor(sqrt(lifetime / divisor))
 const CROWN_BONUS_PER = 0.05;       // each crown adds +5% to global rate
 const CROWN_BONUS_LEDGER = 0.06;    // upgraded rate when Royal Ledger owned
 const EVENT_PACE_PACING = 0.66;     // event interval scale when Cosmic Pacing owned
-const CROWN_SHOP_ITEMS = [
-  { id: 'reinforced', icon: '🥖', name: 'Reinforced Recipe', desc: 'each ascension begins with 1 free apprentice baker.',         cost: 3 },
-  { id: 'pacing',     icon: '⏱️', name: 'Cosmic Pacing',     desc: 'chaos events fire 33% sooner.',                                cost: 8 },
-  { id: 'royalLedger',icon: '📜', name: 'Royal Ledger',      desc: 'each crown contributes +6% rate instead of +5%.',              cost: 10 },
-  { id: 'eternalEgg', icon: '🐣', name: 'Eternal Egg',       desc: 'the tinyclaw companion persists through every ascension.',     cost: 15 },
-  { id: 'steward',    icon: '🤵', name: 'Royal Steward',     desc: 'auto-buys the most rate-efficient treat every 5 seconds.',     cost: 20 },
-  { id: 'ironKnuckles',icon: '🥊', name: 'Iron Knuckles',      desc: 'critical-tap chance becomes 10% (was 5%).',                  cost: 15 },
-  { id: 'luckyHands', icon: '🎰', name: 'Lucky Hands',         desc: 'critical taps multiply by ×15 (was ×10).',                   cost: 25 },
-  { id: 'goldenChime',icon: '🔔', name: 'Golden Chime',         desc: 'plays a clear bell when a golden pumpernickel spawns.',     cost: 5 },
-];
 const AUTO_BUY_INTERVAL_TICKS = 5;
+
 
 function defaultState() {
   return {
