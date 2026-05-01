@@ -105,6 +105,11 @@
   .ach-row:last-child { border-bottom: none; }
   .ach-row .icon { font-size: 1.4rem; width: 32px; }
   .ach-row.locked { opacity: 0.45; }
+  /* Lifetime stats grid above the achievement list. */
+  .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 14px; margin: 8px 0 14px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 10px; font-size: 0.78rem; }
+  .stats .stat { display: flex; justify-content: space-between; gap: 8px; }
+  .stats .stat-k { opacity: 0.65; }
+  .stats .stat-v { color: #ffd980; font-weight: 700; }
   /* Menu tabs (achievements / shop / ascend live in one modal). */
   .menu-tabs { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 1px solid rgba(255,220,180,0.15); }
   .menu-tab { flex: 1; background: transparent; border: none; color: rgba(255,255,255,0.6); padding: 10px 6px; font-size: 0.85rem; font-weight: 700; cursor: pointer; border-bottom: 2px solid transparent; transition: color 0.15s, border-color 0.15s; }
@@ -187,6 +192,7 @@
       </div>
       <div class="menu-pane" data-tab="ach">
         <div class="ach-sub" id="ach-sub"></div>
+        <div class="stats" id="stats"></div>
         <div id="ach-list"></div>
       </div>
       <div class="menu-pane" data-tab="shop" hidden>
@@ -559,6 +565,7 @@ const menuInfoEl = document.getElementById('menu-info');
 // achCountEl removed — menu summary now serves as combined count.
 const achListEl = document.getElementById('ach-list');
 const achSubEl = document.getElementById('ach-sub');
+const statsEl = document.getElementById('stats');
 
 const treatRowsById = {}; // built once by buildTreatRows()
 const bakeryEl = document.getElementById('bakery');
@@ -720,7 +727,23 @@ function renderAchPanel() {
   }
   const bonus = (earned * ACH_BONUS_PER_UNLOCK * 100).toFixed(0);
   achSubEl.textContent = `${earned} of ${ACHIEVEMENTS.length} · +${bonus}% rate`;
+  renderStats();
   refreshMenu();
+}
+function renderStats() {
+  const taps = state.totalTaps || 0;
+  const crits = state.criticalTaps || 0;
+  const critPct = taps > 0 ? ((crits / taps) * 100).toFixed(1) : '0';
+  const totalLifetime = (state.lifetimeBaked || 0) + state.lifetime;
+  const stats = [
+    ['total taps', fmt(taps)],
+    ['critical hits', `${fmt(crits)} (${critPct}%)`],
+    ['goldens tapped', fmt(state.goldensClicked || 0)],
+    ['ascensions', String(state.ascensions || 0)],
+    ['longest streak', String(state.longestStreak || 0)],
+    ['lifetime baked', fmt(totalLifetime)],
+  ];
+  statsEl.innerHTML = stats.map(([k, v]) => `<div class="stat"><span class="stat-k">${k}</span><span class="stat-v">${v}</span></div>`).join('');
 }
 function buy(t) {
   const price = priceOf(t);
