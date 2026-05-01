@@ -76,6 +76,9 @@
   .ach-row.locked { opacity: 0.45; }
   .ach-row .name { font-size: 0.88rem; font-weight: 700; }
   .ach-row .desc { font-size: 0.72rem; opacity: 0.7; margin-top: 1px; }
+  .shop-buy { border: none; border-radius: 8px; padding: 6px 10px; font-weight: 800; min-width: 64px; cursor: pointer; color: #2d1810; background: linear-gradient(180deg, #d4a93a, #a87a18); }
+  .shop-buy.owned { background: #446644; color: #cfe6cf; cursor: default; }
+  .shop-buy:disabled:not(.owned) { background: rgba(80,60,40,0.5); color: #2d1810; cursor: default; }
 
   /* Bakery — visual representation of owned production assets. */
   .bakery { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; max-width: 92vw; min-height: 46px; padding: 4px; }
@@ -284,6 +287,8 @@ const GOLDEN_BONUS_FALLBACK = 100; // floor for early game when rate=0
 const ASCEND_THRESHOLD = 1e9;       // 1B lifetime to unlock first ascension
 const CROWN_DIVISOR = 1e9;          // crowns earned = floor(sqrt(lifetime / divisor))
 const CROWN_BONUS_PER = 0.05;       // each crown adds +5% to global rate
+const CROWN_BONUS_LEDGER = 0.06;    // upgraded rate when Royal Ledger owned
+const EVENT_PACE_PACING = 0.66;     // event interval scale when Cosmic Pacing owned
 const CROWN_SHOP_ITEMS = [
   { id: 'reinforced', icon: '🥖', name: 'Reinforced Recipe', desc: 'each ascension begins with 1 free apprentice baker.',         cost: 3 },
   { id: 'pacing',     icon: '⏱️', name: 'Cosmic Pacing',     desc: 'chaos events fire 33% sooner.',                                cost: 8 },
@@ -372,11 +377,11 @@ function achievementBonus() {
   return Object.keys(state.achievements || {}).length * ACH_BONUS_PER_UNLOCK;
 }
 function crownBonus() {
-  const per = state.crownShop && state.crownShop.royalLedger ? 0.06 : CROWN_BONUS_PER;
+  const per = state.crownShop && state.crownShop.royalLedger ? CROWN_BONUS_LEDGER : CROWN_BONUS_PER;
   return (state.crowns || 0) * per;
 }
 function eventPaceFactor() {
-  return state.crownShop && state.crownShop.pacing ? 0.66 : 1;
+  return state.crownShop && state.crownShop.pacing ? EVENT_PACE_PACING : 1;
 }
 function globalMult() { return (1 + achievementBonus() + crownBonus()) * effectMultiplier(); }
 function rate() { return passiveRate() * globalMult(); }
@@ -779,7 +784,6 @@ document.getElementById('ascend-confirm').addEventListener('click', () => {
 
 // Crown Shop — spend crowns on permanent meta-upgrades.
 function refreshShop() {
-  // Show the shop button once player has made at least one ascension.
   shopBtnEl.hidden = (state.ascensions || 0) < 1;
   shopInfoEl.textContent = `${state.crowns || 0}👑`;
 }
@@ -790,15 +794,14 @@ function renderShop() {
     const owned = !!(state.crownShop && state.crownShop[item.id]);
     const affordable = (state.crowns || 0) >= item.cost;
     const row = document.createElement('div');
-    row.className = 'ach-row' + (owned ? '' : (affordable ? '' : ' locked'));
+    row.className = 'ach-row' + (!owned && !affordable ? ' locked' : '');
     row.innerHTML = `
       <div class="icon">${item.icon}</div>
-      <div class="info" style="flex:1; min-width:0">
+      <div class="info">
         <div class="name">${item.name}</div>
         <div class="desc">${item.desc}</div>
       </div>
-      <button data-id="${item.id}" ${owned || !affordable ? 'disabled' : ''}
-        style="background: ${owned ? '#446644' : (affordable ? 'linear-gradient(180deg, #d4a93a, #a87a18)' : 'rgba(80,60,40,0.5)')}; color: ${owned ? '#cfe6cf' : '#2d1810'}; border: none; border-radius: 8px; padding: 6px 10px; font-weight: 800; cursor: ${owned||!affordable ? 'default' : 'pointer'}; min-width: 64px;">
+      <button data-id="${item.id}" class="shop-buy${owned ? ' owned' : ''}" ${owned || !affordable ? 'disabled' : ''}>
         ${owned ? 'owned' : item.cost + '👑'}
       </button>
     `;
@@ -816,13 +819,14 @@ function buyShopItem(id) {
   state.crowns -= item.cost;
   state.crownShop = state.crownShop || {};
   state.crownShop[id] = true;
-  // Some items take effect immediately on the current run.
   if (id === 'eternalEgg') state.hasEgg = true;
-  if (id === 'reinforced') state.owned.apprentice = (state.owned.apprentice || 0) + 1;
+  if (id === 'reinforced') {
+    state.owned.apprentice = (state.owned.apprentice || 0) + 1;
+    refreshTreats(); refreshBakery();
+  }
   toast(`🪙 ${item.name}`);
   save();
-  renderShop(); refreshShop(); refreshAscend();
-  setPumpEmoji(); refreshTreats(); refreshBakery();
+  renderShop(); refreshShop(); refreshAscend(); renderCount();
 }
 shopBtnEl.addEventListener('click', () => { renderShop(); shopModalEl.classList.add('show'); });
 document.getElementById('shop-close').addEventListener('click', () => shopModalEl.classList.remove('show'));
@@ -849,7 +853,6 @@ setInterval(() => {
   renderCount();
   refreshTreats();
   refreshAscend();
-  refreshShop();
   checkAchievements();
 }, TICK_MS);
 setInterval(save, SAVE_INTERVAL_MS);
