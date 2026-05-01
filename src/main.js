@@ -18,6 +18,8 @@ import { synergyMultFor, passiveRate, effectMultiplier, hasCrown, achievementBon
 import { fmt } from './systems/util.js';
 import { currentPhase, phaseRateMult, phaseTapMult, phaseComboMult, phaseTreatDiscount } from './systems/phases.js';
 import { pantheonSlot, pantheonUnslot } from './systems/pantheon.js';
+import { toast } from './ui/toast.js';
+import { showBanner } from './ui/banner.js';
 
 // Tunables that stay in main for now — phase 1c moves them to systems/.
 const COMBO_RESET_MS = 800;
@@ -26,9 +28,6 @@ const COMBO_MULTIPLIERS = [1, 2, 3, 5];  // 1 → tier1=2 → tier2=3 → tier3=
 const EVENT_MIN_MS = 30000;
 const EVENT_MAX_MS = 90000;
 const FIRST_EVENT_DELAY = 60000;
-const TOAST_MS = 1800;
-const BANNER_MS = 4500;
-const BANNER_GAP_MS = 350;
 const WINK_MIN_MS = 8000;
 const WINK_MAX_MS = 15000;
 const WINK_DURATION_MS = 400;
@@ -87,24 +86,6 @@ function sellOne(t) {
   toast(`sold 1 ${t.name} · +${fmt(refund)}`);
   save(); renderCount(); refreshTreats(); refreshBakery();
 }
-// Toast queue — multiple acks within ~1s queue instead of clobbering. A flood
-// (eg. ascend with many achievements firing) caps at 4 pending so we don't
-// loop forever showing back-to-back toasts.
-let toastQueue = [];
-let toastShowing = false;
-function drainToast() {
-  if (!toastQueue.length) { toastShowing = false; return; }
-  toastShowing = true;
-  const msg = toastQueue.shift();
-  const el = document.getElementById('toast');
-  el.textContent = msg; el.classList.add('show');
-  setTimeout(() => { el.classList.remove('show'); setTimeout(drainToast, 200); }, TOAST_MS);
-}
-function toast(msg) {
-  if (toastQueue.length >= 4) toastQueue.shift();
-  toastQueue.push(msg);
-  if (!toastShowing) drainToast();
-}
 function setPumpEmoji() {
   pumpEl.textContent = state.owned.crowncake ? '👑' : '🍞';
 }
@@ -120,7 +101,6 @@ const auraEl_ = document.getElementById('pump-aura');
 initPumpPhysics({ pump: pumpEl, inner: pumpInnerEl_, aura: auraEl_ });
 const treatsEl = document.getElementById('treats');
 const companionEl = document.getElementById('companion');
-const bannerEl = document.getElementById('event-banner');
 const menuBtnEl = document.getElementById('menu-btn');
 const menuModalEl = document.getElementById('menu-modal');
 const menuInfoEl = document.getElementById('menu-info');
@@ -373,27 +353,6 @@ function checkAchievements() {
   }
 }
 
-// Chaos events
-let bannerQueue = [];
-let bannerShowing = false;
-function showBanner(text, kind) {
-  // Cap queue so background-tab pile-ups don't ambush the player on focus.
-  if (bannerQueue.length >= 5) bannerQueue.shift();
-  bannerQueue.push({ text, kind });
-  if (!bannerShowing) drainBanner();
-}
-function drainBanner() {
-  if (!bannerQueue.length) { bannerShowing = false; return; }
-  bannerShowing = true;
-  const { text, kind } = bannerQueue.shift();
-  bannerEl.className = 'event-banner kind-' + kind;
-  bannerEl.textContent = text;
-  requestAnimationFrame(() => bannerEl.classList.add('show'));
-  setTimeout(() => {
-    bannerEl.classList.remove('show');
-    setTimeout(drainBanner, BANNER_GAP_MS);
-  }, BANNER_MS);
-}
 function fireEvent() {
   if (passiveRate() === 0) return;
   const ev = EVENTS[Math.floor(Math.random() * EVENTS.length)];
