@@ -179,6 +179,13 @@ const HAPTIC_MS = 8;
 const OFFLINE_CAP_SEC = 8 * 3600;
 const SAVE_INTERVAL_MS = 5000;
 const TICK_MS = 1000;
+const CRUMB_GLYPHS = ['·', '•', '◦', '∙'];
+const CRUMB_COUNTS = [4, 2, 1, 1];     // index = comboTierIndex (0..3)
+const CRUMB_DIST_MIN = 40;
+const CRUMB_DIST_RANGE = 40;
+const CRUMB_DURATION_MIN = 600;
+const CRUMB_DURATION_RANGE = 200;
+const CRUMB_LIFETIME_MS = 850;
 
 function defaultState() {
   return {
@@ -498,20 +505,20 @@ pumpEl.addEventListener('pointerdown', (e) => {
   pumpEl.appendChild(f);
   setTimeout(() => f.remove(), 900);
   // Crumb particles — fewer at high streak so it doesn't get spammy.
-  const crumbCount = streakCount >= COMBO_THRESHOLDS[2] ? 1 : streakCount >= COMBO_THRESHOLDS[1] ? 2 : 4;
+  const crumbCount = CRUMB_COUNTS[comboTierIndex()];
   for (let i = 0; i < crumbCount; i++) {
     const c = document.createElement('div');
     c.className = 'crumb';
-    c.textContent = ['·', '•', '◦'][i % 3];
+    c.textContent = CRUMB_GLYPHS[Math.floor(Math.random() * CRUMB_GLYPHS.length)];
     c.style.left = x + 'px'; c.style.top = y + 'px';
     const angle = Math.random() * Math.PI * 2;
-    const dist = 40 + Math.random() * 40;
+    const dist = CRUMB_DIST_MIN + Math.random() * CRUMB_DIST_RANGE;
     c.style.setProperty('--cx', Math.cos(angle) * dist + 'px');
     c.style.setProperty('--cy', Math.sin(angle) * dist + 'px');
     c.style.setProperty('--cr', (Math.random() * 360 - 180) + 'deg');
-    c.style.animation = `crumb-fly ${600 + Math.random() * 200}ms ease-out forwards`;
+    c.style.animation = `crumb-fly ${CRUMB_DURATION_MIN + Math.random() * CRUMB_DURATION_RANGE}ms ease-out forwards`;
     pumpEl.appendChild(c);
-    setTimeout(() => c.remove(), 850);
+    setTimeout(() => c.remove(), CRUMB_LIFETIME_MS);
   }
   renderCount(); renderStreak(); refreshTreats(); checkAchievements();
   if (navigator.vibrate) navigator.vibrate(HAPTIC_MS);
