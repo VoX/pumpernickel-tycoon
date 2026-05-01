@@ -25,6 +25,10 @@
   .effect-pill { font-size: 0.7rem; padding: 3px 8px; border-radius: 999px; border: 1px solid rgba(255,220,180,0.3); background: rgba(0,0,0,0.4); }
   .effect-pill.buff { border-color: rgba(120,200,120,0.6); color: #cfe9c9; }
   .effect-pill.debuff { border-color: rgba(220,120,120,0.6); color: #f0c4c4; }
+  .phase { font-size: 0.75rem; opacity: 0.85; margin-top: 6px; min-height: 1.2em; cursor: help; }
+  .phase .phase-icon { font-size: 0.95rem; margin-right: 4px; }
+  .phase .phase-name { color: #ffd980; font-weight: 700; }
+  .phase .phase-time { opacity: 0.6; font-size: 0.7rem; margin-left: 6px; }
   main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; gap: 18px; padding: 0 12px; }
   /* Outer .pump handles JS-driven depth transform; .pump-inner runs CSS animations. */
   .pump { font-size: min(36vw, 180px); cursor: pointer; position: relative; display: flex; align-items: center; justify-content: center; line-height: 1; padding: 16px; user-select: none; will-change: transform; transition: transform 0.18s ease-out, filter 0.25s, text-shadow 0.25s; }
@@ -165,6 +169,7 @@
     <div class="rate" id="rate"></div>
     <div class="streak" id="streak"></div>
     <div class="effects" id="effects" aria-label="Active effects"></div>
+    <div class="phase" id="phase" aria-label="Current phase"></div>
   </header>
   <main>
     <div class="pump" id="pump" role="button" aria-label="Tap to collect a pumpernickel"><span class="pump-inner" id="pump-inner">🍞<span class="pump-aura" id="pump-aura" aria-hidden="true"></span></span></div>
@@ -368,6 +373,14 @@ const GOLDEN_BUFFS = [
   { id: 'g_fizzle',    copy: 'fizzle. x1.5 (it tried.)',  mult: 1.5 },
 ];
 const CRUMB_RIPEN_MS = 60 * 60 * 1000;  // ripe crumb every 1 hour real-time
+const PHASE_DURATION_MS = 30 * 60 * 1000; // each sourdough phase lasts ~30 min of play
+const PHASES = [
+  { id: 'knead', icon: '✊', name: 'Knead',  desc: 'longer combos. streak decay halved.',                  comboMult: 2 },
+  { id: 'rise',  icon: '🫧', name: 'Rise',   desc: '+50% passive rate, but tap value -50%.',                rateMult: 1.5, tapMult: 0.5 },
+  { id: 'bake',  icon: '🔥', name: 'Bake',   desc: 'buff events fire 2× often. debuffs are blocked.',       buffPace: 0.5, blockDebuffs: true },
+  { id: 'cool',  icon: '❄️', name: 'Cool',  desc: 'chaos events suspended. every 60s, bank +10%.',          suspendEvents: true, bankBonusEvery: 60, bankBonusPct: 0.10 },
+  { id: 'stale', icon: '🥖', name: 'Stale',  desc: 'production -25%, but treats are 50% off.',              rateMult: 0.75, treatDiscount: 0.5 },
+];
 const ASCEND_THRESHOLD = 1e9;       // 1B lifetime to unlock first ascension
 const CROWN_DIVISOR = 1e9;          // crowns earned = floor(sqrt(lifetime / divisor))
 const CROWN_BONUS_PER = 0.05;       // each crown adds +5% to global rate
@@ -392,7 +405,8 @@ function defaultState() {
     buffsConsecutive: 0, startedAt: Date.now(), hasEgg: false,
     activeEffects: [], criticalTaps: 0, goldensClicked: 0,
     crowns: 0, ascensions: 0, lifetimeBaked: 0, crownShop: {},
-    crumbs: 0, lastCrumbAt: Date.now(), saveVersion: 3,
+    crumbs: 0, lastCrumbAt: Date.now(),
+    phaseIndex: 0, phaseStartAt: Date.now(), saveVersion: 3,
   };
 }
 
@@ -430,6 +444,8 @@ function load() {
     state.crownShop = (s.crownShop && typeof s.crownShop === 'object') ? s.crownShop : {};
     state.crumbs = typeof s.crumbs === 'number' ? s.crumbs : 0;
     state.lastCrumbAt = typeof s.lastCrumbAt === 'number' ? s.lastCrumbAt : Date.now();
+    state.phaseIndex = typeof s.phaseIndex === 'number' ? s.phaseIndex : 0;
+    state.phaseStartAt = typeof s.phaseStartAt === 'number' ? s.phaseStartAt : Date.now();
     state.lastTick = typeof s.lastTick === 'number' ? s.lastTick : Date.now();
     state.saveVersion = 3;
     if (isV1) { localStorage.removeItem(SAVE_KEY_V1); save(); }
@@ -521,6 +537,13 @@ function effectMultiplier() {
   for (const e of state.activeEffects) if (now < e.expiresAt) m *= e.mult;
   return m;
 }
+function currentPhase() {
+  return PHASES[(state.phaseIndex || 0) % PHASES.length];
+}
+function phaseRateMult() { return currentPhase().rateMult || 1; }
+function phaseTapMult() { return currentPhase().tapMult || 1; }
+function phaseComboMult() { return currentPhase().comboMult || 1; }
+function phaseTreatDiscount() { return currentPhase().treatDiscount || 1; }
 function achievementBonus() {
   return Object.keys(state.achievements || {}).length * ACH_BONUS_PER_UNLOCK;
 }
@@ -531,7 +554,7 @@ function crownBonus() {
 function eventPaceFactor() {
   return state.crownShop && state.crownShop.pacing ? EVENT_PACE_PACING : 1;
 }
-function globalMult() { return (1 + achievementBonus() + crownBonus()) * effectMultiplier(); }
+function globalMult() { return (1 + achievementBonus() + crownBonus()) * effectMultiplier() * phaseRateMult(); }
 function rate() { return passiveRate() * globalMult(); }
 function comboTier() {
   // Walk thresholds high→low, return matching multiplier index.
@@ -549,9 +572,9 @@ function comboTierIndex() {
 function tapAmount() {
   const bonus = TREATS.filter(t => t.tapBonus).reduce((s, t) => s + (t.tapBonus * (state.owned[t.id] || 0)), 0);
   const fromRate = passiveRate() * TAP_RATE_FACTOR;
-  return (1 + bonus + fromRate) * comboTier() * globalMult();
+  return (1 + bonus + fromRate) * comboTier() * globalMult() * phaseTapMult();
 }
-function priceOf(t) { return Math.ceil(t.cost * Math.pow(t.costGrowth, state.owned[t.id] || 0)); }
+function priceOf(t) { return Math.ceil(t.cost * Math.pow(t.costGrowth, state.owned[t.id] || 0) * phaseTreatDiscount()); }
 function lastPriceOf(t) {
   const owned = state.owned[t.id] || 0;
   if (owned <= 0) return 0;
@@ -580,6 +603,7 @@ const countEl = document.getElementById('count');
 const rateEl = document.getElementById('rate');
 const streakEl = document.getElementById('streak');
 const effectsEl = document.getElementById('effects');
+const phaseEl = document.getElementById('phase');
 const pumpEl = document.getElementById('pump');
 const treatsEl = document.getElementById('treats');
 const companionEl = document.getElementById('companion');
@@ -734,6 +758,14 @@ function renderStreak() {
   pumpEl.classList.toggle('combo-3', tier === 3);
   lastStreakTier = tier;
 }
+function renderPhase() {
+  const ph = currentPhase();
+  const remaining = Math.max(0, PHASE_DURATION_MS - (Date.now() - state.phaseStartAt));
+  const minutes = Math.floor(remaining / 60000);
+  const seconds = Math.floor((remaining % 60000) / 1000).toString().padStart(2, '0');
+  phaseEl.title = ph.desc;
+  phaseEl.innerHTML = `<span class="phase-icon">${ph.icon}</span><span class="phase-name">${ph.name}</span><span class="phase-time">${minutes}:${seconds}</span>`;
+}
 function renderEffects() {
   // Show one pill per active effect with mult and remaining seconds.
   const now = Date.now();
@@ -871,8 +903,13 @@ function drainBanner() {
 function fireEvent() {
   if (passiveRate() === 0) return;
   const ev = EVENTS[Math.floor(Math.random() * EVENTS.length)];
-  // Yeast Insurance consumes one to block this debuff entirely.
   const isDebuff = ev.kind === 'debuff' || (ev.kind === 'instant_pct' && ev.factor < 0);
+  // Bake phase blocks all debuffs.
+  if (isDebuff && currentPhase().blockDebuffs) {
+    showBanner(`🔥 bake phase shielded: ${ev.copy.split('.')[0]}`, 'buff');
+    return;
+  }
+  // Yeast Insurance consumes one to block this debuff entirely.
   if (isDebuff && (state.owned.insurance || 0) > 0) {
     state.owned.insurance -= 1;
     showBanner(`☂️ insurance blocked: ${ev.copy.split('.')[0]}`, 'buff');
@@ -900,8 +937,10 @@ function fireEvent() {
   save(); renderCount(); renderEffects(); checkAchievements();
 }
 function scheduleNextEvent() {
-  const wait = (EVENT_MIN_MS + Math.random() * (EVENT_MAX_MS - EVENT_MIN_MS)) * eventPaceFactor();
-  setTimeout(() => { fireEvent(); scheduleNextEvent(); }, wait);
+  const ph = currentPhase();
+  const phasePace = ph.buffPace || (ph.suspendEvents ? 999 : 1);
+  const wait = (EVENT_MIN_MS + Math.random() * (EVENT_MAX_MS - EVENT_MIN_MS)) * eventPaceFactor() * phasePace;
+  setTimeout(() => { if (!currentPhase().suspendEvents) fireEvent(); scheduleNextEvent(); }, wait);
 }
 
 // Golden Pumpernickel — random clickable bonus.
@@ -1157,6 +1196,8 @@ document.getElementById('ascend-confirm').addEventListener('click', () => {
     startedAt: state.startedAt || Date.now(),
     crumbs: state.crumbs || 0,
     lastCrumbAt: state.lastCrumbAt || Date.now(),
+    phaseIndex: state.phaseIndex || 0,
+    phaseStartAt: state.phaseStartAt || Date.now(),
   };
   state = Object.assign(defaultState(), carry);
   if (shop.reinforced) state.owned.apprentice = (state.owned.apprentice || 0) + 1;
@@ -1256,6 +1297,19 @@ setInterval(() => {
     state.lastCrumbAt += CRUMB_RIPEN_MS;
     toast(`🍞 a ripe crumb appeared. you have ${state.crumbs}.`);
   }
+  // Sourdough Phases — global rule cycler. Advances on real elapsed time.
+  while (now - state.phaseStartAt >= PHASE_DURATION_MS) {
+    state.phaseStartAt += PHASE_DURATION_MS;
+    state.phaseIndex = ((state.phaseIndex || 0) + 1) % PHASES.length;
+    const ph = currentPhase();
+    showBanner(`${ph.icon} entering ${ph.name} phase — ${ph.desc}`, 'buff');
+  }
+  // Cool phase: bank +10% every 60s (no events firing during this phase).
+  if (currentPhase().bankBonusEvery && tickCount % currentPhase().bankBonusEvery === 0 && state.count > 0) {
+    const bonus = Math.floor(state.count * currentPhase().bankBonusPct);
+    if (bonus > 0) { state.count += bonus; state.lifetime += bonus; }
+  }
+  renderPhase();
   renderCount();
   renderEffects();
   refreshTreats();
@@ -1274,6 +1328,7 @@ renderAchPanel();
 refreshAscend();
 refreshShop();
 renderEffects();
+renderPhase();
 setTimeout(() => scheduleNextEvent(), FIRST_EVENT_DELAY);
 scheduleNextGolden();
 scheduleWink();
