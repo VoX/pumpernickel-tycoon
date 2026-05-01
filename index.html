@@ -376,6 +376,8 @@ const CROWN_SHOP_ITEMS = [
   { id: 'royalLedger',icon: '📜', name: 'Royal Ledger',      desc: 'each crown contributes +6% rate instead of +5%.',              cost: 10 },
   { id: 'eternalEgg', icon: '🐣', name: 'Eternal Egg',       desc: 'the tinyclaw companion persists through every ascension.',     cost: 15 },
   { id: 'steward',    icon: '🤵', name: 'Royal Steward',     desc: 'auto-buys the most rate-efficient treat every 5 seconds.',     cost: 20 },
+  { id: 'ironKnuckles',icon: '🥊', name: 'Iron Knuckles',      desc: 'critical-tap chance becomes 10% (was 5%).',                  cost: 15 },
+  { id: 'luckyHands', icon: '🎰', name: 'Lucky Hands',         desc: 'critical taps multiply by ×15 (was ×10).',                   cost: 25 },
 ];
 const AUTO_BUY_INTERVAL_TICKS = 5;
 
@@ -996,8 +998,10 @@ pumpEl.addEventListener('pointerdown', (e) => {
   pumpVelocity += PUMP_CLICK_IMPULSE; // physics: click adds velocity, spring/drag handles the rest
   startPumpFrame();
 
-  const crit = Math.random() < CRIT_CHANCE;
-  const gain = Math.floor(tapAmount() * (crit ? CRIT_MULT : 1));
+  const critChance = (state.crownShop && state.crownShop.ironKnuckles) ? 0.10 : CRIT_CHANCE;
+  const critMult = (state.crownShop && state.crownShop.luckyHands) ? 15 : CRIT_MULT;
+  const crit = Math.random() < critChance;
+  const gain = Math.floor(tapAmount() * (crit ? critMult : 1));
   state.count += gain; state.lifetime += gain; state.totalTaps++;
   if (crit) state.criticalTaps = (state.criticalTaps || 0) + 1;
   const rect = pumpEl.getBoundingClientRect();
