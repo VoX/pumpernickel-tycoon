@@ -104,7 +104,7 @@
   /* Bakery — visual representation of owned production assets. */
   .bakery { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; max-width: 92vw; min-height: 46px; padding: 4px; }
   .bakery:empty { display: none; }
-  .asset { display: inline-flex; align-items: center; gap: 4px; background: rgba(255,220,180,0.08); border: 1px solid rgba(255,220,180,0.18); padding: 4px 8px; border-radius: 999px; font-size: 0.85rem; transition: transform 0.18s, background 0.2s; }
+  .asset { display: inline-flex; align-items: center; gap: 4px; background: rgba(255,220,180,0.08); border: 1px solid rgba(255,220,180,0.18); padding: 4px 8px; border-radius: 999px; font-size: 0.85rem; transition: transform 0.18s, background 0.2s; cursor: pointer; }
   .asset .asset-icon { font-size: 1.05rem; line-height: 1; }
   .asset .asset-count { font-weight: 700; color: #ffd980; font-size: 0.78rem; }
   .asset.bumped { transform: scale(1.18); background: rgba(255,220,180,0.22); }
@@ -553,6 +553,22 @@ const shopListEl = document.getElementById('shop-list');
 const shopInfoEl = document.getElementById('shop-info');
 const bakeryAssetsById = {}; // built lazily by refreshBakery()
 
+// Per-baker contribution (rate × owned × stacked synergy mults).
+function bakerContribution(t) {
+  const owned = state.owned[t.id] || 0;
+  if (!t.rate || owned <= 0) return { contribution: 0, synergy: 1 };
+  let synergy = 1;
+  for (const s of TREATS) {
+    if (s.synergyTarget === t.id && (state.owned[s.id] || 0) > 0) synergy *= s.synergyMult;
+  }
+  return { contribution: t.rate * owned * synergy, synergy };
+}
+function bakerInfo(t) {
+  const owned = state.owned[t.id] || 0;
+  const { contribution, synergy } = bakerContribution(t);
+  const synergyTxt = synergy > 1 ? ` ×${synergy} synergy` : '';
+  return `${t.name} ×${owned} → +${fmt(contribution)}/s${synergyTxt}`;
+}
 function refreshBakery() {
   for (const t of TREATS) {
     if (!t.rate && !t.tapBonus && !t.hatch && t.id !== 'crowncake') continue;
@@ -569,7 +585,7 @@ function refreshBakery() {
       el.dataset.id = t.id;
       if (t.bobMs) el.style.setProperty('--bob', t.bobMs + 'ms');
       el.innerHTML = `<span class="asset-icon">${t.icon}</span><span class="asset-count">×${owned}</span>`;
-      el.title = t.name;
+      el.addEventListener('click', () => toast(bakerInfo(t)));
       bakeryEl.appendChild(el);
       row = bakeryAssetsById[t.id] = { el, countEl: el.querySelector('.asset-count'), owned };
     }
@@ -579,6 +595,8 @@ function refreshBakery() {
       row.el.classList.add('bumped');
       setTimeout(() => row.el.classList.remove('bumped'), 220);
     }
+    // Always refresh hover tooltip — rate may change due to synergy purchases.
+    row.el.title = bakerInfo(t);
   }
 }
 
