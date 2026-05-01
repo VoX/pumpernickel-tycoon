@@ -1274,7 +1274,7 @@ function popBurntCrust(crustIdx) {
   const c = state.burntCrusts[crustIdx];
   const payout = Math.floor(c.drained * BURNT_CRUST_PAYOUT_MULT);
   state.count += payout;
-  state.lifetime += Math.max(0, payout - Math.floor(c.drained)); // only the bonus over what was drained
+  state.lifetime += Math.floor(c.drained * (BURNT_CRUST_PAYOUT_MULT - 1)); // only the 10% bonus, not the recovery
   state.burntCrusts.splice(crustIdx, 1);
   invalidatePassiveRate();
   toast(`🥵 popped! +${fmt(payout)}`);
@@ -1492,17 +1492,24 @@ document.getElementById('ascend-confirm').addEventListener('click', () => {
     pantheon: state.pantheon || [null, null, null],
     market: state.market || { holdings: {}, prices: {}, lastUpdateAt: 0 },
   };
+  // Auto-pop all attached burnt crusts at ascend time so accumulated drain
+  // isn't silently lost when bakers reset. Pays out at the standard 110%.
+  let crustPayout = 0;
+  for (const c of (state.burntCrusts || [])) crustPayout += Math.floor(c.drained * BURNT_CRUST_PAYOUT_MULT);
   state = Object.assign(defaultState(), carry);
   if (shop.reinforced) state.owned.apprentice = (state.owned.apprentice || 0) + 1;
   invalidatePassiveRate();
   streakCount = 0;
   lastRenderedCount = -1; lastRenderedRate = -1; lastStreakTier = -1;
   setPumpEmoji();
+  // Apply the carried crust payout (state.count is post-reset bank).
+  if (crustPayout > 0) state.count += crustPayout;
   menuModalEl.classList.remove('show');
   const flash = document.getElementById('ascend-flash');
   flash.classList.remove('show'); void flash.offsetWidth; flash.classList.add('show');
   SFX.ascend();
-  toast(`✨ ascended. +${gain}👑 — total ${state.crowns}`);
+  const tail = crustPayout > 0 ? ` (carried crust payout: +${fmt(crustPayout)})` : '';
+  toast(`✨ ascended. +${gain}👑 — total ${state.crowns}${tail}`);
   save(); renderCount(); refreshTreats(); refreshBakery(); renderAchPanel(); refreshAscend(); refreshShop();
 });
 
@@ -1990,6 +1997,10 @@ let tickCount = 0;
 setInterval(() => {
   tickCount++;
   const now = Date.now();
+  // Real-elapsed-since-last-tick — used by garden so background-tab throttling
+  // doesn't pause plant growth in wall-clock time. Cap at 5min to avoid
+  // single-tick offline jumps that mature everything at once.
+  const dt = Math.min(now - (state.lastTick || now), 5 * 60 * 1000);
   state.activeEffects = state.activeEffects.filter(e => now < e.expiresAt);
   const r = rate();
   if (r > 0) { state.count += r; state.lifetime += r; }
@@ -2018,15 +2029,19 @@ setInterval(() => {
     }
     refreshBakery();
   }
-  // Yeast Garden — advance grow timers. Stardust requires an active buff.
-  for (let i = 0; i < (state.garden ? state.garden.length : 0); i++) {
-    const plot = state.garden[i];
-    if (!plot.species) continue;
-    const sp = SPECIES.find(s => s.id === plot.species);
-    if (!sp) continue;
-    const buffActive = state.activeEffects.some(e => Date.now() < e.expiresAt && e.mult > 1);
-    if (sp.requiresBuff && !buffActive) continue;
-    plot.lastTickAt = Math.min(plot.plantedAt + sp.growMs, plot.lastTickAt + TICK_MS);
+  // Yeast Garden — advance plot grow timers by real elapsed time so a
+  // backgrounded tab still sees plants mature at the advertised rate.
+  // Stardust pauses when no buff is up.
+  if (state.garden.some(p => p.species)) {
+    const buffActive = hasActiveBuff();
+    for (let i = 0; i < state.garden.length; i++) {
+      const plot = state.garden[i];
+      if (!plot.species) continue;
+      const sp = SPECIES.find(s => s.id === plot.species);
+      if (!sp) continue;
+      if (sp.requiresBuff && !buffActive) continue;
+      plot.lastTickAt = Math.min(plot.plantedAt + sp.growMs, plot.lastTickAt + dt);
+    }
   }
   // Sourdough Phases — global rule cycler. Advances on real elapsed time.
   while (now - state.phaseStartAt >= PHASE_DURATION_MS) {
