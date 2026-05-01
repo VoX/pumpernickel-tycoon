@@ -20,6 +20,11 @@
   .rate { font-size: 0.8rem; opacity: 0.7; margin-top: 4px; min-height: 1.2em; }
   .streak { font-size: 0.85rem; opacity: 0; margin-top: 6px; transition: opacity 0.2s; min-height: 1.1em; color: #ffd980; }
   .streak.show { opacity: 0.95; }
+  .effects { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 6px; min-height: 22px; }
+  .effects:empty { min-height: 0; }
+  .effect-pill { font-size: 0.7rem; padding: 3px 8px; border-radius: 999px; border: 1px solid rgba(255,220,180,0.3); background: rgba(0,0,0,0.4); }
+  .effect-pill.buff { border-color: rgba(120,200,120,0.6); color: #cfe9c9; }
+  .effect-pill.debuff { border-color: rgba(220,120,120,0.6); color: #f0c4c4; }
   main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; gap: 18px; padding: 0 12px; }
   .pump { font-size: min(36vw, 180px); cursor: pointer; transition: transform 0.08s ease-out, filter 0.25s, text-shadow 0.25s; position: relative; display: flex; align-items: center; justify-content: center; line-height: 1; padding: 16px; user-select: none; }
   .pump:active { transform: scale(0.92); }
@@ -52,13 +57,15 @@
   .owned { font-size: 0.7rem; opacity: 0.65; margin-top: 2px; min-height: 0.9rem; }
   .toast { position: fixed; bottom: 60vh; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.9); padding: 10px 16px; border-radius: 10px; font-size: 0.85rem; opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 100; max-width: 90vw; text-align: center; }
   .toast.show { opacity: 1; }
-  .topbtn { position: fixed; top: 8px; background: rgba(0,0,0,0.4); color: rgba(255,255,255,0.7); border: none; padding: 6px 10px; border-radius: 6px; font-size: 0.7rem; cursor: pointer; z-index: 50; }
+  .topbtn { position: fixed; top: 10px; background: rgba(0,0,0,0.4); color: rgba(255,255,255,0.85); border: none; padding: 12px 14px; border-radius: 10px; font-size: 0.78rem; cursor: pointer; z-index: 50; min-height: 44px; min-width: 44px; }
   .topbtn:hover { color: #fff; background: rgba(0,0,0,0.6); }
   #ach-btn { left: 8px; }
   #ascend-btn { left: 50%; transform: translateX(-50%); background: linear-gradient(180deg, #d4a93a, #a87a18); color: #2d1810; font-weight: 800; }
   #ascend-btn:hover { background: linear-gradient(180deg, #ffd060, #c98a18); }
-  #shop-btn { left: 8px; top: 38px; background: rgba(60,40,20,0.6); }
-  #reset { right: 8px; font-size: 0.65rem; color: rgba(255,255,255,0.5); }
+  #shop-btn { left: 8px; top: 62px; background: rgba(60,40,20,0.6); }
+  /* Reset is moved to a dim corner footer to avoid misclicks next to ascend/shop. */
+  #reset { right: 8px; bottom: calc(env(safe-area-inset-bottom) + 4px); top: auto; padding: 8px 10px; font-size: 0.62rem; color: rgba(255,255,255,0.32); background: transparent; min-height: 0; min-width: 0; }
+  #reset:hover { color: rgba(255,255,255,0.6); background: rgba(0,0,0,0.3); }
   .event-banner { position: fixed; top: calc(env(safe-area-inset-top) + 12px); left: 50%; transform: translateX(-50%) translateY(-20px); padding: 10px 16px; background: rgba(40,20,10,0.94); border: 1px solid rgba(255,220,180,0.35); border-radius: 10px; max-width: 90vw; font-size: 0.85rem; z-index: 200; opacity: 0; transition: opacity 0.3s, transform 0.3s; pointer-events: none; }
   .event-banner.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   .event-banner.kind-buff { border-color: rgba(120,200,120,0.6); }
@@ -67,7 +74,8 @@
   .ach-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 300; display: none; align-items: center; justify-content: center; padding: 20px; }
   .ach-modal.show { display: flex; }
   .ach-card { background: linear-gradient(180deg, #3a2618 0%, #2d1810 100%); border: 1px solid rgba(255,220,180,0.25); border-radius: 14px; padding: 18px; max-width: 520px; max-height: 85vh; width: 100%; overflow-y: auto; position: relative; }
-  .ach-close { position: absolute; top: 8px; right: 12px; background: none; border: none; color: rgba(255,255,255,0.6); font-size: 1.4rem; cursor: pointer; }
+  .ach-close { position: absolute; top: 4px; right: 6px; background: none; border: none; color: rgba(255,255,255,0.7); font-size: 1.6rem; cursor: pointer; padding: 8px 12px; min-width: 44px; min-height: 44px; line-height: 1; }
+  .ach-close:hover { color: #fff; }
   .ach-title { font-size: 1.05rem; font-weight: 800; margin-bottom: 4px; }
   .ach-sub { font-size: 0.78rem; opacity: 0.65; margin-bottom: 14px; }
   .ach-row { display: flex; gap: 10px; padding: 8px 4px; border-bottom: 1px solid rgba(255,220,180,0.08); }
@@ -112,6 +120,7 @@
     </div>
     <div class="rate" id="rate"></div>
     <div class="streak" id="streak"></div>
+    <div class="effects" id="effects" aria-label="Active effects"></div>
   </header>
   <main>
     <div class="pump" id="pump" role="button" aria-label="Tap to collect a pumpernickel">🍞</div>
@@ -417,6 +426,7 @@ function setPumpEmoji() {
 const countEl = document.getElementById('count');
 const rateEl = document.getElementById('rate');
 const streakEl = document.getElementById('streak');
+const effectsEl = document.getElementById('effects');
 const pumpEl = document.getElementById('pump');
 const treatsEl = document.getElementById('treats');
 const companionEl = document.getElementById('companion');
@@ -541,6 +551,18 @@ function renderStreak() {
   pumpEl.classList.toggle('combo-3', tier === 3);
   lastStreakTier = tier;
 }
+function renderEffects() {
+  // Show one pill per active effect with mult and remaining seconds.
+  const now = Date.now();
+  const live = (state.activeEffects || []).filter(e => now < e.expiresAt);
+  if (live.length === 0) { effectsEl.textContent = ''; return; }
+  effectsEl.innerHTML = live.map(e => {
+    const remaining = Math.ceil((e.expiresAt - now) / 1000);
+    const kind = e.mult >= 1 ? 'buff' : 'debuff';
+    const sign = e.mult >= 1 ? `×${e.mult}` : `×${e.mult.toFixed(2)}`;
+    return `<span class="effect-pill ${kind}">${sign} · ${remaining}s</span>`;
+  }).join('');
+}
 function renderAchPanel() {
   achListEl.innerHTML = '';
   let earned = 0;
@@ -645,7 +667,7 @@ function fireEvent() {
   else if (ev.kind === 'debuff' || (ev.kind === 'instant_pct' && ev.factor < 0)) state.buffsConsecutive = 0;
   const copy = streakHot ? ev.copy + ' (streak ×2!)' : ev.copy;
   showBanner(copy, ev.kind);
-  save(); renderCount(); checkAchievements();
+  save(); renderCount(); renderEffects(); checkAchievements();
 }
 function scheduleNextEvent() {
   const wait = (EVENT_MIN_MS + Math.random() * (EVENT_MAX_MS - EVENT_MIN_MS)) * eventPaceFactor();
@@ -880,6 +902,7 @@ setInterval(() => {
     if (t && state.count >= priceOf(t)) buy(t);
   }
   renderCount();
+  renderEffects();
   refreshTreats();
   refreshAscend();
   checkAchievements();
@@ -895,6 +918,7 @@ renderCount();
 renderAchPanel();
 refreshAscend();
 refreshShop();
+renderEffects();
 setTimeout(() => scheduleNextEvent(), FIRST_EVENT_DELAY);
 scheduleNextGolden();
 scheduleWink();
