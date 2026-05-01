@@ -922,9 +922,9 @@ function fireAura() {
 
 // Tap depth — sustained clicks push the bread back; lack of clicks decays.
 let pumpDepth = 0;
-const PUSH_PER_CLICK = 0.10;
+const PUSH_PER_CLICK = 0.18;
 const PUSH_MAX = 1.0;
-const PUSH_HALFLIFE_MS = 600;     // depth halves every 600ms when not clicked
+const PUSH_HALFLIFE_MS = 350;     // depth halves every 350ms when not clicked
 const PUSH_SCALE_AT_MAX = 0.70;   // pump shrinks to 70% at max depth
 let pumpDepthLast = performance.now();
 function pumpDepthFrame(now) {
