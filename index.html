@@ -194,6 +194,25 @@
   .plot-detail-actions .harvest-btn:disabled { opacity: 0.5; cursor: default; }
   .plot-detail-actions .clear-btn { background: rgba(160,80,80,0.5); color: #f0c4c4; }
   .garden-summary { font-size: 0.72rem; opacity: 0.72; margin-top: 6px; line-height: 1.4; }
+  /* Pantheon */
+  .pantheon-slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 8px 0 14px; }
+  .pantheon-slot { background: rgba(0,0,0,0.35); border: 1px solid rgba(255,220,180,0.2); border-radius: 12px; padding: 10px 6px; text-align: center; cursor: pointer; min-height: 78px; transition: background 0.15s, border-color 0.15s; }
+  .pantheon-slot:hover { border-color: rgba(255,220,180,0.5); }
+  .pantheon-slot .slot-name { font-size: 0.7rem; opacity: 0.65; text-transform: uppercase; letter-spacing: 0.1em; }
+  .pantheon-slot .slot-weight { font-size: 0.65rem; color: #ffd980; opacity: 0.85; }
+  .pantheon-slot .slot-icon { font-size: 1.6rem; line-height: 1.2; }
+  .pantheon-slot .slot-name-filled { font-size: 0.78rem; font-weight: 700; margin-top: 2px; }
+  .pantheon-slot.empty .slot-icon { opacity: 0.3; }
+  .pantheon-pool { display: grid; grid-template-columns: 1fr; gap: 6px; }
+  .temperament { display: flex; gap: 10px; align-items: center; padding: 8px 10px; background: rgba(255,220,180,0.06); border: 1px solid rgba(255,220,180,0.15); border-radius: 10px; }
+  .temperament.slotted { background: rgba(255,220,180,0.18); border-color: rgba(255,220,180,0.45); }
+  .temperament .temp-icon { font-size: 1.5rem; }
+  .temperament .temp-name { font-weight: 700; font-size: 0.88rem; }
+  .temperament .temp-desc { font-size: 0.72rem; opacity: 0.72; margin-top: 1px; }
+  .temperament .temp-actions { display: flex; gap: 4px; flex-shrink: 0; }
+  .temperament .slot-btn { background: rgba(60,40,20,0.7); color: #ffd980; border: none; border-radius: 6px; padding: 4px 8px; font-size: 0.7rem; font-weight: 700; cursor: pointer; }
+  .temperament .slot-btn:disabled { opacity: 0.5; cursor: default; }
+  .temperament .slot-btn.unslot { background: rgba(160,80,80,0.5); color: #f0c4c4; }
 </style>
 </head>
 <body>
@@ -231,6 +250,7 @@
         <button class="menu-tab" data-tab="ach" role="tab">🏆 <span class="tab-label">Achievements</span></button>
         <button class="menu-tab" data-tab="shop" role="tab">🪙 <span class="tab-label">Shop</span></button>
         <button class="menu-tab" data-tab="garden" role="tab">🌱 <span class="tab-label">Garden</span></button>
+        <button class="menu-tab" data-tab="pantheon" role="tab">🏛️ <span class="tab-label">Pantheon</span></button>
         <button class="menu-tab" data-tab="ascend" role="tab">👑 <span class="tab-label">Ascend</span></button>
       </div>
       <div class="menu-pane" data-tab="ach">
@@ -241,6 +261,11 @@
       <div class="menu-pane" data-tab="shop" hidden>
         <div class="ach-sub" id="shop-sub"></div>
         <div id="shop-list"></div>
+      </div>
+      <div class="menu-pane" data-tab="pantheon" hidden>
+        <div class="ach-sub">slot 3 temperaments. each has a tradeoff. swaps cost 1 🍞.</div>
+        <div class="pantheon-slots" id="pantheon-slots"></div>
+        <div class="pantheon-pool" id="pantheon-pool"></div>
       </div>
       <div class="menu-pane" data-tab="garden" hidden>
         <div class="ach-sub" id="garden-sub">plant species in plots. harvest for buffs and curiosities.</div>
@@ -421,6 +446,18 @@ const GOLDEN_BUFFS = [
 ];
 const CRUMB_RIPEN_MS = 60 * 60 * 1000;  // ripe crumb every 1 hour real-time
 const PHASE_DURATION_MS = 30 * 60 * 1000; // each sourdough phase lasts ~30 min of play
+// Tinyclaw Pantheon — 3 weighted slots × 6 temperaments. Each has tradeoffs.
+const PANTHEON_SLOT_WEIGHTS = [1.5, 1.0, 0.5]; // heart, mind, belly
+const PANTHEON_SLOT_NAMES = ['Heart', 'Mind', 'Belly'];
+const PANTHEON_SWAP_COST = 1; // crumbs per swap
+const TEMPERAMENTS = [
+  { id: 'hungry',  icon: '😋', name: 'Hungry',  desc: '+30% baker rate · -20% tap value', mods: { rate: 0.30, tap: -0.20 } },
+  { id: 'lazy',    icon: '😴', name: 'Lazy',    desc: '+50% offline gain · -15% buff duration', mods: { offline: 0.50, buffDuration: -0.15 } },
+  { id: 'greedy',  icon: '🤑', name: 'Greedy',  desc: '+50% instant amounts · -10% rate while tapping', mods: { instantAmount: 0.50, rate: -0.10 } },
+  { id: 'cunning', icon: '🧐', name: 'Cunning', desc: '+30% golden frequency · -15% buff strength', mods: { goldenFreq: 0.30, buffStrength: -0.15 } },
+  { id: 'stout',   icon: '💪', name: 'Stout',   desc: '+25% combo bonus · -30% crit chance', mods: { combo: 0.25, crit: -0.30 } },
+  { id: 'dreamer', icon: '🌙', name: 'Dreamer', desc: '+50% achievement bonus · -15% no-buff rate', mods: { achBonus: 0.50, rateNoBuff: -0.15 } },
+];
 const BURNT_CRUST_THRESHOLD = 1e9;        // unlocks at 1B lifetime
 const BURNT_CRUST_MIN_MS = 5 * 60 * 1000; // 5min between attempts
 const BURNT_CRUST_MAX_MS = 15 * 60 * 1000;
@@ -477,6 +514,7 @@ function defaultState() {
     phaseIndex: 0, phaseStartAt: Date.now(),
     garden: emptyGarden(), barleyBonus: 0,
     burntCrusts: [],
+    pantheon: [null, null, null],
     saveVersion: 3,
   };
 }
@@ -538,9 +576,13 @@ function load() {
     state.burntCrusts = Array.isArray(s.burntCrusts) ? s.burntCrusts.filter(c =>
       c && typeof c.bakerId === 'string' && typeof c.attachedAt === 'number' && typeof c.drained === 'number'
     ) : [];
+    state.pantheon = (Array.isArray(s.pantheon) && s.pantheon.length === 3)
+      ? s.pantheon.map(t => (typeof t === 'string' && TEMPERAMENTS.some(x => x.id === t)) ? t : null)
+      : [null, null, null];
     state.saveVersion = 3;
     if (isV1) { localStorage.removeItem(SAVE_KEY_V1); save(); }
-    const dt = Math.min((Date.now() - state.lastTick) / 1000, OFFLINE_CAP_SEC);
+    const offlineCap = OFFLINE_CAP_SEC * (1 + pantheonMod('offline'));
+    const dt = Math.min((Date.now() - state.lastTick) / 1000, offlineCap);
     const offlineGain = Math.floor(dt * rate());
     if (offlineGain > 0) { state.count += offlineGain; state.lifetime += offlineGain; toast(`+${fmt(offlineGain)} while you were gone`); }
   } catch {}
@@ -652,7 +694,7 @@ function phaseTapMult() { return currentPhase().tapMult || 1; }
 function phaseComboMult() { return currentPhase().comboMult || 1; }
 function phaseTreatDiscount() { return currentPhase().treatDiscount || 1; }
 function achievementBonus() {
-  return Object.keys(state.achievements || {}).length * ACH_BONUS_PER_UNLOCK;
+  return Object.keys(state.achievements || {}).length * ACH_BONUS_PER_UNLOCK * (1 + pantheonMod('achBonus'));
 }
 function crownBonus() {
   const per = state.crownShop && state.crownShop.royalLedger ? CROWN_BONUS_LEDGER : CROWN_BONUS_PER;
@@ -672,7 +714,31 @@ function hasGardenChaosBoost() {
   const now = Date.now();
   return (state.activeEffects || []).some(e => e.id === 'g_hops' && now < e.expiresAt);
 }
-function globalMult() { return (1 + achievementBonus() + crownBonus() + gardenBonus()) * effectMultiplier() * phaseRateMult(); }
+// Pantheon modifier — sums slotted temperament effects weighted by slot.
+// Returns a fraction (e.g. 0.30 for +30%); apply as `× (1 + pantheonMod(stat))`.
+function pantheonMod(stat) {
+  let mod = 0;
+  if (!state.pantheon) return 0;
+  for (let i = 0; i < 3; i++) {
+    const tid = state.pantheon[i];
+    if (!tid) continue;
+    const t = TEMPERAMENTS.find(x => x.id === tid);
+    if (!t || t.mods[stat] === undefined) continue;
+    mod += t.mods[stat] * PANTHEON_SLOT_WEIGHTS[i];
+  }
+  return mod;
+}
+function hasActiveBuff() {
+  const now = Date.now();
+  return (state.activeEffects || []).some(e => now < e.expiresAt && e.mult > 1);
+}
+function globalMult() {
+  const baseMult = (1 + achievementBonus() + crownBonus() + gardenBonus()) * effectMultiplier() * phaseRateMult();
+  // Pantheon: rate stat, plus the no-buff penalty if dreamer is slotted and no buff is up.
+  let pantheonRate = pantheonMod('rate');
+  if (!hasActiveBuff()) pantheonRate += pantheonMod('rateNoBuff');
+  return baseMult * (1 + pantheonRate);
+}
 function rate() { return passiveRate() * globalMult(); }
 function comboTier() {
   // Walk thresholds high→low, return matching multiplier index.
@@ -690,7 +756,8 @@ function comboTierIndex() {
 function tapAmount() {
   const bonus = TREATS.filter(t => t.tapBonus).reduce((s, t) => s + (t.tapBonus * (state.owned[t.id] || 0)), 0);
   const fromRate = passiveRate() * TAP_RATE_FACTOR;
-  return (1 + bonus + fromRate) * comboTier() * phaseComboMult() * globalMult() * phaseTapMult();
+  const combo = comboTier() * phaseComboMult() * (1 + pantheonMod('combo'));
+  return (1 + bonus + fromRate) * combo * globalMult() * phaseTapMult() * (1 + pantheonMod('tap'));
 }
 function priceOf(t) { return Math.ceil(t.cost * Math.pow(t.costGrowth, state.owned[t.id] || 0) * phaseTreatDiscount()); }
 function lastPriceOf(t) {
@@ -1050,14 +1117,21 @@ function fireEvent() {
   // Buff streak: 3+ buffs in a row makes the next buff hit twice as hard.
   const streakHot = ev.kind === 'buff' && state.buffsConsecutive >= 3;
   if (ev.kind === 'instant') {
-    state.count = Math.max(0, state.count + ev.amount);
-    if (ev.amount > 0) state.lifetime += ev.amount;
+    // Greedy boosts positive instants (debit events stay raw).
+    const amt = ev.amount > 0 ? Math.floor(ev.amount * (1 + pantheonMod('instantAmount'))) : ev.amount;
+    state.count = Math.max(0, state.count + amt);
+    if (amt > 0) state.lifetime += amt;
   } else if (ev.kind === 'instant_pct') {
     const delta = Math.floor(state.count * ev.factor);
     state.count = Math.max(0, state.count + delta);
   } else if (ev.kind === 'buff' || ev.kind === 'debuff') {
-    const mult = streakHot ? ev.mult * 2 : ev.mult;
-    state.activeEffects.push({ id: ev.id, expiresAt: Date.now() + ev.duration, mult });
+    let mult = streakHot ? ev.mult * 2 : ev.mult;
+    // Cunning weakens buff strength (only positive buffs — debuffs unaffected).
+    if (mult > 1) mult = Math.max(1, 1 + (mult - 1) * (1 + pantheonMod('buffStrength')));
+    // Lazy shortens buff duration (only buffs).
+    let dur = ev.duration;
+    if (ev.kind === 'buff') dur = Math.max(1000, dur * (1 + pantheonMod('buffDuration')));
+    state.activeEffects.push({ id: ev.id, expiresAt: Date.now() + dur, mult });
   }
   if (ev.kind === 'buff') state.buffsConsecutive++;
   else if (isDebuff) state.buffsConsecutive = 0;
@@ -1093,7 +1167,9 @@ function spawnGolden() {
   }, GOLDEN_LIFETIME_MS);
 }
 function scheduleNextGolden() {
-  const wait = GOLDEN_MIN_MS + Math.random() * (GOLDEN_MAX_MS - GOLDEN_MIN_MS);
+  // Cunning temperament makes goldens fire faster.
+  const freqMod = 1 + pantheonMod('goldenFreq');
+  const wait = (GOLDEN_MIN_MS + Math.random() * (GOLDEN_MAX_MS - GOLDEN_MIN_MS)) / Math.max(0.1, freqMod);
   setTimeout(spawnGolden, wait);
 }
 goldenEl.addEventListener('pointerdown', (e) => {
@@ -1246,7 +1322,8 @@ pumpEl.addEventListener('pointerdown', (e) => {
   pumpVelocity += PUMP_CLICK_IMPULSE; // physics: click adds velocity, spring/drag handles the rest
   startPumpFrame();
 
-  const critChance = (state.crownShop && state.crownShop.ironKnuckles) ? 0.10 : CRIT_CHANCE;
+  const baseCritChance = (state.crownShop && state.crownShop.ironKnuckles) ? 0.10 : CRIT_CHANCE;
+  const critChance = Math.max(0, baseCritChance * (1 + pantheonMod('crit')));
   const critMult = (state.crownShop && state.crownShop.luckyHands) ? 15 : CRIT_MULT;
   const crit = Math.random() < critChance;
   const gain = Math.floor(tapAmount() * (crit ? critMult : 1));
@@ -1293,6 +1370,7 @@ function switchTab(tab) {
   else if (tab === 'shop') renderShop();
   else if (tab === 'ascend') openAscendPane();
   else if (tab === 'garden') renderGarden();
+  else if (tab === 'pantheon') renderPantheon();
 }
 function refreshMenu() {
   // Tab availability gates content rather than hiding tabs.
@@ -1302,6 +1380,8 @@ function refreshMenu() {
   shopTab.disabled = (state.ascensions || 0) < 1 && (state.crowns || 0) === 0;
   ascendTab.disabled = state.lifetime < ASCEND_THRESHOLD && (state.crowns || 0) === 0;
   if (gardenTab) gardenTab.disabled = (state.crumbs || 0) === 0 && state.garden && state.garden.every(p => !p.species);
+  const pantheonTab = document.querySelector('.menu-tab[data-tab="pantheon"]');
+  if (pantheonTab) pantheonTab.disabled = (state.ascensions || 0) < 1;
   // If active tab is now disabled, fall back to ach.
   const activeBtn = document.querySelector(`.menu-tab[data-tab="${activeTab}"]`);
   if (activeBtn && activeBtn.disabled) { activeTab = 'ach'; }
@@ -1366,6 +1446,7 @@ document.getElementById('ascend-confirm').addEventListener('click', () => {
     phaseStartAt: state.phaseStartAt || Date.now(),
     garden: state.garden || emptyGarden(),
     barleyBonus: state.barleyBonus || 0,
+    pantheon: state.pantheon || [null, null, null],
   };
   state = Object.assign(defaultState(), carry);
   if (shop.reinforced) state.owned.apprentice = (state.owned.apprentice || 0) + 1;
@@ -1655,6 +1736,83 @@ function renderGarden() {
   if (gardenSummaryEl) gardenSummaryEl.textContent = `crumbs: ${state.crumbs || 0} · barley harvests cap at +${(GARDEN_BARLEY_CAP * 100).toFixed(0)}% (currently +${(gardenBonus() * 100).toFixed(1)}%)`;
 }
 if (waterBtnEl) waterBtnEl.addEventListener('click', waterRandomPlot);
+
+// Tinyclaw Pantheon — slot 3 temperaments with weighted effects.
+const pantheonSlotsEl = document.getElementById('pantheon-slots');
+const pantheonPoolEl = document.getElementById('pantheon-pool');
+function pantheonSlot(slotIdx, tempId) {
+  if (slotIdx < 0 || slotIdx > 2) return;
+  // Cost a crumb if displacing an existing temperament, otherwise free.
+  const occupied = !!state.pantheon[slotIdx];
+  if (occupied && (state.crumbs || 0) < PANTHEON_SWAP_COST) {
+    toast(`swap costs ${PANTHEON_SWAP_COST} 🍞`);
+    return;
+  }
+  if (occupied) state.crumbs -= PANTHEON_SWAP_COST;
+  // Remove this temperament from any other slot first (no duplicates).
+  for (let i = 0; i < 3; i++) if (state.pantheon[i] === tempId) state.pantheon[i] = null;
+  state.pantheon[slotIdx] = tempId;
+  save(); renderPantheon(); refreshMenu();
+}
+function pantheonUnslot(slotIdx) {
+  if (slotIdx < 0 || slotIdx > 2) return;
+  if (!state.pantheon[slotIdx]) return;
+  state.pantheon[slotIdx] = null;
+  save(); renderPantheon(); refreshMenu();
+}
+function renderPantheon() {
+  if (!pantheonSlotsEl) return;
+  pantheonSlotsEl.innerHTML = '';
+  for (let i = 0; i < 3; i++) {
+    const slot = document.createElement('div');
+    const tempId = state.pantheon ? state.pantheon[i] : null;
+    const t = tempId ? TEMPERAMENTS.find(x => x.id === tempId) : null;
+    slot.className = 'pantheon-slot' + (t ? '' : ' empty');
+    slot.innerHTML = `
+      <div class="slot-name">${PANTHEON_SLOT_NAMES[i]}</div>
+      <div class="slot-weight">×${PANTHEON_SLOT_WEIGHTS[i]}</div>
+      <div class="slot-icon">${t ? t.icon : '○'}</div>
+      <div class="slot-name-filled">${t ? t.name : 'empty'}</div>
+    `;
+    if (t) slot.addEventListener('click', () => pantheonUnslot(i));
+    pantheonSlotsEl.appendChild(slot);
+  }
+  pantheonPoolEl.innerHTML = '';
+  for (const t of TEMPERAMENTS) {
+    const slottedAt = (state.pantheon || []).indexOf(t.id);
+    const isSlotted = slottedAt >= 0;
+    const row = document.createElement('div');
+    row.className = 'temperament' + (isSlotted ? ' slotted' : '');
+    row.innerHTML = `
+      <div class="temp-icon">${t.icon}</div>
+      <div style="flex:1; min-width: 0">
+        <div class="temp-name">${t.name}${isSlotted ? ` <span style="opacity:0.6; font-weight:400">(${PANTHEON_SLOT_NAMES[slottedAt]})</span>` : ''}</div>
+        <div class="temp-desc">${t.desc}</div>
+      </div>
+      <div class="temp-actions"></div>
+    `;
+    const actions = row.querySelector('.temp-actions');
+    if (isSlotted) {
+      const unslotBtn = document.createElement('button');
+      unslotBtn.className = 'slot-btn unslot';
+      unslotBtn.textContent = 'unslot';
+      unslotBtn.addEventListener('click', () => pantheonUnslot(slottedAt));
+      actions.appendChild(unslotBtn);
+    } else {
+      for (let i = 0; i < 3; i++) {
+        const btn = document.createElement('button');
+        btn.className = 'slot-btn';
+        const occupied = !!state.pantheon[i];
+        btn.textContent = PANTHEON_SLOT_NAMES[i].charAt(0); // H/M/B
+        btn.title = `slot in ${PANTHEON_SLOT_NAMES[i]} (×${PANTHEON_SLOT_WEIGHTS[i]})${occupied ? ` — costs ${PANTHEON_SWAP_COST} 🍞` : ''}`;
+        if (occupied && (state.crumbs || 0) < PANTHEON_SWAP_COST) btn.disabled = true;
+        btn.addEventListener('click', () => pantheonSlot(i, t.id));
+        actions.appendChild(btn);
+      }
+    }
+    pantheonPoolEl.appendChild(row);
+  }
+}
 
 const helpModalEl = document.getElementById('help-modal');
 document.getElementById('help-btn').addEventListener('click', () => helpModalEl.classList.add('show'));
