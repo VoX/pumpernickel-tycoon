@@ -695,15 +695,21 @@ document.getElementById('ascend-confirm').addEventListener('click', () => {
   const earnable = crownsForLifetime(state.lifetime);
   const gain = earnable - (state.crowns || 0);
   if (gain <= 0) { ascendModalEl.classList.remove('show'); return; }
-  const carriedCrowns = (state.crowns || 0) + gain;
-  const carriedAscensions = (state.ascensions || 0) + 1;
-  const carriedBaked = (state.lifetimeBaked || 0) + state.lifetime;
-  const carriedAchievements = state.achievements || {};
-  state = defaultState();
-  state.crowns = carriedCrowns;
-  state.ascensions = carriedAscensions;
-  state.lifetimeBaked = carriedBaked;
-  state.achievements = carriedAchievements;
+  // Carry forward: economy resets, but progression markers persist so unlocked
+  // achievements stay coherent (no vanishing egg, no re-armed 24h timer, etc).
+  const carry = {
+    crowns: (state.crowns || 0) + gain,
+    ascensions: (state.ascensions || 0) + 1,
+    lifetimeBaked: (state.lifetimeBaked || 0) + state.lifetime,
+    achievements: state.achievements || {},
+    totalTaps: state.totalTaps || 0,
+    longestStreak: state.longestStreak || 0,
+    criticalTaps: state.criticalTaps || 0,
+    goldensClicked: state.goldensClicked || 0,
+    hasEgg: !!state.hasEgg,
+    startedAt: state.startedAt || Date.now(),
+  };
+  state = Object.assign(defaultState(), carry);
   streakCount = 0;
   lastRenderedCount = -1; lastRenderedRate = -1; lastStreakTier = -1;
   setPumpEmoji();
