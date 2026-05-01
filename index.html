@@ -55,6 +55,8 @@
   .topbtn { position: fixed; top: 8px; background: rgba(0,0,0,0.4); color: rgba(255,255,255,0.7); border: none; padding: 6px 10px; border-radius: 6px; font-size: 0.7rem; cursor: pointer; z-index: 50; }
   .topbtn:hover { color: #fff; background: rgba(0,0,0,0.6); }
   #ach-btn { left: 8px; }
+  #ascend-btn { left: 50%; transform: translateX(-50%); background: linear-gradient(180deg, #d4a93a, #a87a18); color: #2d1810; font-weight: 800; }
+  #ascend-btn:hover { background: linear-gradient(180deg, #ffd060, #c98a18); }
   #reset { right: 8px; font-size: 0.65rem; color: rgba(255,255,255,0.5); }
   .event-banner { position: fixed; top: calc(env(safe-area-inset-top) + 12px); left: 50%; transform: translateX(-50%) translateY(-20px); padding: 10px 16px; background: rgba(40,20,10,0.94); border: 1px solid rgba(255,220,180,0.35); border-radius: 10px; max-width: 90vw; font-size: 0.85rem; z-index: 200; opacity: 0; transition: opacity 0.3s, transform 0.3s; pointer-events: none; }
   .event-banner.show { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -109,6 +111,7 @@
     <div id="treats"></div>
   </section>
   <button class="topbtn" id="ach-btn" aria-label="Achievements">🏆 <span id="ach-count">0/16</span></button>
+  <button class="topbtn" id="ascend-btn" aria-label="Ascend the Tinyclaw" hidden>👑 <span id="ascend-info">Ascend</span></button>
   <button class="topbtn" id="reset" aria-label="Reset save">RESET</button>
   <div class="toast" id="toast"></div>
   <div class="event-banner" id="event-banner"></div>
@@ -119,6 +122,15 @@
       <div class="ach-title">🏆 Achievements</div>
       <div class="ach-sub" id="ach-sub">0 of 14</div>
       <div id="ach-list"></div>
+    </div>
+  </div>
+  <div class="ach-modal" id="ascend-modal" role="dialog" aria-label="Ascend">
+    <div class="ach-card">
+      <button class="ach-close" id="ascend-close" aria-label="Close">×</button>
+      <div class="ach-title">👑 Ascend the Tinyclaw</div>
+      <div class="ach-sub">trade your kingdom for crowns. each crown grants +5% rate forever.</div>
+      <div id="ascend-detail" style="font-size: 0.9rem; line-height: 1.6; padding: 6px 4px;"></div>
+      <button id="ascend-confirm" style="margin-top: 12px; width: 100%; padding: 12px; background: linear-gradient(180deg, #d4a93a, #a87a18); color: #2d1810; border: none; border-radius: 10px; font-weight: 800; font-size: 0.95rem; cursor: pointer;">Ascend</button>
     </div>
   </div>
 <script>
@@ -235,13 +247,17 @@ const GOLDEN_MAX_MS = 180000;
 const GOLDEN_LIFETIME_MS = 9000;
 const GOLDEN_BONUS_SECONDS = 60;
 const GOLDEN_BONUS_FALLBACK = 100; // floor for early game when rate=0
+const ASCEND_THRESHOLD = 1e9;       // 1B lifetime to unlock first ascension
+const CROWN_DIVISOR = 1e9;          // crowns earned = floor(sqrt(lifetime / divisor))
+const CROWN_BONUS_PER = 0.05;       // each crown adds +5% to global rate
 
 function defaultState() {
   return {
     count: 0, owned: {}, lifetime: 0, lastTick: Date.now(),
     achievements: {}, totalTaps: 0, longestStreak: 0,
     buffsConsecutive: 0, startedAt: Date.now(), hasEgg: false,
-    activeEffects: [], criticalTaps: 0, goldensClicked: 0, saveVersion: 2,
+    activeEffects: [], criticalTaps: 0, goldensClicked: 0,
+    crowns: 0, ascensions: 0, lifetimeBaked: 0, saveVersion: 3,
   };
 }
 
@@ -273,8 +289,11 @@ function load() {
     state.activeEffects = Array.isArray(s.activeEffects) ? s.activeEffects : [];
     state.criticalTaps = typeof s.criticalTaps === 'number' ? s.criticalTaps : 0;
     state.goldensClicked = typeof s.goldensClicked === 'number' ? s.goldensClicked : 0;
+    state.crowns = typeof s.crowns === 'number' ? s.crowns : 0;
+    state.ascensions = typeof s.ascensions === 'number' ? s.ascensions : 0;
+    state.lifetimeBaked = typeof s.lifetimeBaked === 'number' ? s.lifetimeBaked : 0;
     state.lastTick = typeof s.lastTick === 'number' ? s.lastTick : Date.now();
-    state.saveVersion = 2;
+    state.saveVersion = 3;
     if (isV1) { localStorage.removeItem(SAVE_KEY_V1); save(); }
     const dt = Math.min((Date.now() - state.lastTick) / 1000, OFFLINE_CAP_SEC);
     const offlineGain = Math.floor(dt * rate());
@@ -311,7 +330,10 @@ function effectMultiplier() {
 function achievementBonus() {
   return Object.keys(state.achievements || {}).length * ACH_BONUS_PER_UNLOCK;
 }
-function globalMult() { return (1 + achievementBonus()) * effectMultiplier(); }
+function crownBonus() {
+  return (state.crowns || 0) * CROWN_BONUS_PER;
+}
+function globalMult() { return (1 + achievementBonus() + crownBonus()) * effectMultiplier(); }
 function rate() { return passiveRate() * globalMult(); }
 function comboTier() {
   // Walk thresholds high→low, return matching multiplier index.
@@ -356,6 +378,10 @@ const achSubEl = document.getElementById('ach-sub');
 const treatRowsById = {}; // built once by buildTreatRows()
 const bakeryEl = document.getElementById('bakery');
 const goldenEl = document.getElementById('golden');
+const ascendBtnEl = document.getElementById('ascend-btn');
+const ascendModalEl = document.getElementById('ascend-modal');
+const ascendDetailEl = document.getElementById('ascend-detail');
+const ascendInfoEl = document.getElementById('ascend-info');
 const bakeryAssetsById = {}; // built lazily by refreshBakery()
 
 function refreshBakery() {
@@ -636,6 +662,56 @@ achBtnEl.addEventListener('click', () => { renderAchPanel(); achModalEl.classLis
 document.getElementById('ach-close').addEventListener('click', () => achModalEl.classList.remove('show'));
 achModalEl.addEventListener('click', (e) => { if (e.target === achModalEl) achModalEl.classList.remove('show'); });
 
+// Prestige — ascend the tinyclaw.
+function crownsForLifetime(lifetime) {
+  return Math.floor(Math.sqrt(Math.max(0, lifetime) / CROWN_DIVISOR));
+}
+function refreshAscend() {
+  const earnable = crownsForLifetime(state.lifetime);
+  const gain = earnable - (state.crowns || 0);
+  // Show the button once first ascension is reachable, OR if any crowns owned.
+  const visible = state.lifetime >= ASCEND_THRESHOLD || (state.crowns || 0) > 0;
+  ascendBtnEl.hidden = !visible;
+  ascendInfoEl.textContent = (state.crowns || 0) > 0
+    ? `${state.crowns}👑 +${Math.round(crownBonus()*100)}%`
+    : `Ascend (+${gain}👑)`;
+}
+function openAscend() {
+  const earnable = crownsForLifetime(state.lifetime);
+  const gain = Math.max(0, earnable - (state.crowns || 0));
+  const have = state.crowns || 0;
+  ascendDetailEl.innerHTML = `
+    you have <b>${have}</b> 👑 (+${Math.round(have*CROWN_BONUS_PER*100)}% rate).<br>
+    ascending now grants <b>+${gain}</b> 👑 (total +${Math.round((have+gain)*CROWN_BONUS_PER*100)}%).<br>
+    <span style="opacity:0.65">resets pumpernickels, bakers, eggs, and effects. keeps achievements and crowns.</span>
+  `;
+  ascendModalEl.classList.add('show');
+  document.getElementById('ascend-confirm').disabled = gain <= 0;
+}
+ascendBtnEl.addEventListener('click', openAscend);
+document.getElementById('ascend-close').addEventListener('click', () => ascendModalEl.classList.remove('show'));
+ascendModalEl.addEventListener('click', (e) => { if (e.target === ascendModalEl) ascendModalEl.classList.remove('show'); });
+document.getElementById('ascend-confirm').addEventListener('click', () => {
+  const earnable = crownsForLifetime(state.lifetime);
+  const gain = earnable - (state.crowns || 0);
+  if (gain <= 0) { ascendModalEl.classList.remove('show'); return; }
+  const carriedCrowns = (state.crowns || 0) + gain;
+  const carriedAscensions = (state.ascensions || 0) + 1;
+  const carriedBaked = (state.lifetimeBaked || 0) + state.lifetime;
+  const carriedAchievements = state.achievements || {};
+  state = defaultState();
+  state.crowns = carriedCrowns;
+  state.ascensions = carriedAscensions;
+  state.lifetimeBaked = carriedBaked;
+  state.achievements = carriedAchievements;
+  streakCount = 0;
+  lastRenderedCount = -1; lastRenderedRate = -1; lastStreakTier = -1;
+  setPumpEmoji();
+  ascendModalEl.classList.remove('show');
+  toast(`✨ ascended. +${gain}👑 — total ${state.crowns}`);
+  save(); renderCount(); refreshTreats(); refreshBakery(); renderAchPanel(); refreshAscend();
+});
+
 document.getElementById('reset').addEventListener('click', () => {
   if (!confirm('Reset all progress?')) return;
   localStorage.removeItem(SAVE_KEY);
@@ -644,7 +720,7 @@ document.getElementById('reset').addEventListener('click', () => {
   streakCount = 0;
   lastRenderedCount = -1; lastRenderedRate = -1; lastStreakTier = -1;
   setPumpEmoji();
-  renderCount(); refreshTreats(); refreshBakery(); renderAchPanel();
+  renderCount(); refreshTreats(); refreshBakery(); renderAchPanel(); refreshAscend();
 });
 
 // Tick — passive accumulation + treat-affordability refresh + achievement check.
@@ -656,6 +732,7 @@ setInterval(() => {
   state.lastTick = now;
   renderCount();
   refreshTreats();
+  refreshAscend();
   checkAchievements();
 }, TICK_MS);
 setInterval(save, SAVE_INTERVAL_MS);
@@ -667,6 +744,7 @@ refreshBakery();
 setPumpEmoji();
 renderCount();
 renderAchPanel();
+refreshAscend();
 setTimeout(() => scheduleNextEvent(), FIRST_EVENT_DELAY);
 scheduleNextGolden();
 scheduleWink();
