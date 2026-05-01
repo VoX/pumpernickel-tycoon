@@ -475,6 +475,10 @@ function setMuted(v) {
   muted = v;
   localStorage.setItem(SFX_MUTE_KEY, v ? '1' : '0');
   document.getElementById('mute-btn').textContent = v ? '🔇' : '🔊';
+  // Suspend the audio thread when muted; resume lazily on first non-muted tone.
+  if (audioCtx) {
+    if (v && audioCtx.state === 'running') audioCtx.suspend();
+  }
 }
 function fmt(n) {
   n = Math.floor(n);
@@ -913,12 +917,14 @@ function scheduleWink() {
 // Tap handler
 const auraEl = document.getElementById('pump-aura');
 const pumpInnerEl = document.getElementById('pump-inner');
+let bounceClearTimer = null;
 function bouncePump() {
   // Inline animation on .pump-inner overrides breathe/pulse for the duration.
+  if (bounceClearTimer) clearTimeout(bounceClearTimer);
   pumpInnerEl.style.animation = 'none';
   void pumpInnerEl.offsetWidth;
   pumpInnerEl.style.animation = 'tap-bounce 280ms cubic-bezier(0.34, 1.2, 0.4, 1)';
-  setTimeout(() => { pumpInnerEl.style.animation = ''; }, 300);
+  bounceClearTimer = setTimeout(() => { pumpInnerEl.style.animation = ''; bounceClearTimer = null; }, 300);
 }
 function fireAura() {
   auraEl.classList.remove('fire');
@@ -936,6 +942,7 @@ const PUMP_CLICK_IMPULSE = 4.5;    // velocity added per click (depth-units / s)
 const PUSH_MAX = 1.5;              // depth ceiling — bread can't be pushed past this
 const PUSH_SCALE_AT_MAX = 0.6;     // visual scale at max depth
 let pumpDepthLast = performance.now();
+let pumpFrameActive = false;
 function pumpDepthFrame(now) {
   let dt = (now - pumpDepthLast) / 1000;
   if (dt > 0.1) dt = 0.1; // clamp huge dt after tab-blur
@@ -948,9 +955,15 @@ function pumpDepthFrame(now) {
   const scale = 1 - (pumpDepth / PUSH_MAX) * (1 - PUSH_SCALE_AT_MAX);
   const moving = pumpDepth > 0.001 || Math.abs(pumpVelocity) > 0.005;
   pumpEl.style.transform = moving ? `scale(${scale})` : '';
+  if (moving) requestAnimationFrame(pumpDepthFrame);
+  else pumpFrameActive = false;
+}
+function startPumpFrame() {
+  if (pumpFrameActive) return;
+  pumpFrameActive = true;
+  pumpDepthLast = performance.now();
   requestAnimationFrame(pumpDepthFrame);
 }
-requestAnimationFrame(pumpDepthFrame);
 pumpEl.addEventListener('pointerdown', (e) => {
   const now = Date.now();
   const prevTier = comboTierIndex();
@@ -965,6 +978,7 @@ pumpEl.addEventListener('pointerdown', (e) => {
   if (newTier > prevTier && newTier > 0) { fireAura(); toast(`🔥 streak ×${comboTier()}`); }
   bouncePump();
   pumpVelocity += PUMP_CLICK_IMPULSE; // physics: click adds velocity, spring/drag handles the rest
+  startPumpFrame();
 
   const crit = Math.random() < CRIT_CHANCE;
   const gain = Math.floor(tapAmount() * (crit ? CRIT_MULT : 1));
