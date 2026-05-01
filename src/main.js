@@ -12,6 +12,7 @@ import { GARDEN_PLOT_COUNT, GARDEN_GRID_SIZE, GARDEN_BARLEY_BONUS, GARDEN_BARLEY
 import { CROWN_SHOP_ITEMS } from './content/crown-shop.js';
 
 import { SFX, setMuted, isMuted } from './systems/audio.js';
+import { initPumpPhysics, bouncePump, fireAura, pumpClickImpulse } from './systems/physics.js';
 
 // Tunables that stay in main for now — phase 1c moves them to systems/.
 const SAVE_KEY = 'pumpernickel-save-v2';
@@ -318,6 +319,9 @@ const streakEl = document.getElementById('streak');
 const effectsEl = document.getElementById('effects');
 const phaseEl = document.getElementById('phase');
 const pumpEl = document.getElementById('pump');
+const pumpInnerEl_ = document.getElementById('pump-inner');
+const auraEl_ = document.getElementById('pump-aura');
+initPumpPhysics({ pump: pumpEl, inner: pumpInnerEl_, aura: auraEl_ });
 const treatsEl = document.getElementById('treats');
 const companionEl = document.getElementById('companion');
 const bannerEl = document.getElementById('event-banner');
@@ -785,55 +789,6 @@ function scheduleWink() {
 }
 
 // Tap handler
-const auraEl = document.getElementById('pump-aura');
-const pumpInnerEl = document.getElementById('pump-inner');
-let bounceClearTimer = null;
-function bouncePump() {
-  // Inline animation on .pump-inner overrides breathe/pulse for the duration.
-  if (bounceClearTimer) clearTimeout(bounceClearTimer);
-  pumpInnerEl.style.animation = 'none';
-  void pumpInnerEl.offsetWidth;
-  pumpInnerEl.style.animation = 'tap-bounce 280ms cubic-bezier(0.34, 1.2, 0.4, 1)';
-  bounceClearTimer = setTimeout(() => { pumpInnerEl.style.animation = ''; bounceClearTimer = null; }, 300);
-}
-function fireAura() {
-  auraEl.classList.remove('fire');
-  void auraEl.offsetWidth;
-  auraEl.classList.add('fire');
-}
-
-// Tap depth — 1D spring-damper physics. Each click adds velocity (impulse);
-// gravity (spring) pulls depth back to 0; drag damps the motion.
-let pumpDepth = 0;
-let pumpVelocity = 0;
-const PUMP_SPRING = 140;           // depth-units / s² per depth unit (k)
-const PUMP_DRAG = 9;               // velocity damping coefficient (c)
-const PUMP_CLICK_IMPULSE = 4.5;    // velocity added per click (depth-units / s)
-const PUSH_MAX = 1.5;              // depth ceiling — bread can't be pushed past this
-const PUSH_SCALE_AT_MAX = 0.6;     // visual scale at max depth
-let pumpDepthLast = performance.now();
-let pumpFrameActive = false;
-function pumpDepthFrame(now) {
-  let dt = (now - pumpDepthLast) / 1000;
-  if (dt > 0.1) dt = 0.1; // clamp huge dt after tab-blur
-  pumpDepthLast = now;
-  const accel = -PUMP_SPRING * pumpDepth - PUMP_DRAG * pumpVelocity;
-  pumpVelocity += accel * dt;
-  pumpDepth += pumpVelocity * dt;
-  if (pumpDepth < 0) { pumpDepth = 0; if (pumpVelocity < 0) pumpVelocity = 0; }
-  if (pumpDepth > PUSH_MAX) { pumpDepth = PUSH_MAX; if (pumpVelocity > 0) pumpVelocity = 0; }
-  const scale = 1 - (pumpDepth / PUSH_MAX) * (1 - PUSH_SCALE_AT_MAX);
-  const moving = pumpDepth > 0.001 || Math.abs(pumpVelocity) > 0.005;
-  pumpEl.style.transform = moving ? `scale(${scale})` : '';
-  if (moving) requestAnimationFrame(pumpDepthFrame);
-  else pumpFrameActive = false;
-}
-function startPumpFrame() {
-  if (pumpFrameActive) return;
-  pumpFrameActive = true;
-  pumpDepthLast = performance.now();
-  requestAnimationFrame(pumpDepthFrame);
-}
 pumpEl.addEventListener('pointerdown', (e) => {
   const now = Date.now();
   const prevTier = comboTierIndex();
@@ -849,8 +804,7 @@ pumpEl.addEventListener('pointerdown', (e) => {
   const newTier = comboTierIndex();
   if (newTier > prevTier && newTier > 0) { fireAura(); toast(`🔥 streak ×${comboTier()}`); }
   bouncePump();
-  pumpVelocity += PUMP_CLICK_IMPULSE; // physics: click adds velocity, spring/drag handles the rest
-  startPumpFrame();
+  pumpClickImpulse();
 
   const baseCritChance = hasCrown('ironKnuckles') ? 0.10 : CRIT_CHANCE;
   const critChance = Math.max(0, baseCritChance * (1 + pantheonMod('crit')));
