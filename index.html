@@ -26,10 +26,14 @@
   .effect-pill.buff { border-color: rgba(120,200,120,0.6); color: #cfe9c9; }
   .effect-pill.debuff { border-color: rgba(220,120,120,0.6); color: #f0c4c4; }
   main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; gap: 18px; padding: 0 12px; }
-  .pump { font-size: min(36vw, 180px); cursor: pointer; position: relative; display: flex; align-items: center; justify-content: center; line-height: 1; padding: 16px; user-select: none; will-change: transform; animation: breathe 4.5s ease-in-out infinite; transition: filter 0.25s, text-shadow 0.25s; }
+  /* Outer .pump handles JS-driven depth transform; .pump-inner runs CSS animations. */
+  .pump { font-size: min(36vw, 180px); cursor: pointer; position: relative; display: flex; align-items: center; justify-content: center; line-height: 1; padding: 16px; user-select: none; will-change: transform; transition: transform 0.18s ease-out, filter 0.25s, text-shadow 0.25s; }
+  .pump-inner { display: inline-flex; align-items: center; justify-content: center; line-height: 1; will-change: transform; animation: breathe 4.5s ease-in-out infinite; }
   .pump.combo-1 { filter: drop-shadow(0 0 18px rgba(255,180,80,0.55)); }
-  .pump.combo-2 { filter: drop-shadow(0 0 28px rgba(255,140,40,0.85)); animation: pulse 0.9s ease-in-out infinite; }
-  .pump.combo-3 { filter: drop-shadow(0 0 44px rgba(255,80,20,1)); animation: pulse 0.6s ease-in-out infinite; }
+  .pump.combo-2 .pump-inner { animation: pulse 0.9s ease-in-out infinite; }
+  .pump.combo-2 { filter: drop-shadow(0 0 28px rgba(255,140,40,0.85)); }
+  .pump.combo-3 .pump-inner { animation: pulse 0.6s ease-in-out infinite; }
+  .pump.combo-3 { filter: drop-shadow(0 0 44px rgba(255,80,20,1)); }
   @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.05); } }
   @keyframes breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.02); } }
   /* Per-tap squish + rebound. Applied via inline animation to override pulse/breathe. */
@@ -154,7 +158,7 @@
     </div>
   </header>
   <main>
-    <div class="pump" id="pump" role="button" aria-label="Tap to collect a pumpernickel">🍞<span class="pump-aura" id="pump-aura" aria-hidden="true"></span></div>
+    <div class="pump" id="pump" role="button" aria-label="Tap to collect a pumpernickel"><span class="pump-inner" id="pump-inner">🍞<span class="pump-aura" id="pump-aura" aria-hidden="true"></span></span></div>
     <div class="bakery" id="bakery" aria-label="Your bakery"></div>
   </main>
   <section class="shop">
@@ -902,18 +906,37 @@ function scheduleWink() {
 
 // Tap handler
 const auraEl = document.getElementById('pump-aura');
+const pumpInnerEl = document.getElementById('pump-inner');
 function bouncePump() {
-  // Inline animation overrides .pump's breathe/pulse for the duration.
-  pumpEl.style.animation = 'none';
-  void pumpEl.offsetWidth;
-  pumpEl.style.animation = 'tap-bounce 280ms cubic-bezier(0.34, 1.2, 0.4, 1)';
-  setTimeout(() => { pumpEl.style.animation = ''; }, 300);
+  // Inline animation on .pump-inner overrides breathe/pulse for the duration.
+  pumpInnerEl.style.animation = 'none';
+  void pumpInnerEl.offsetWidth;
+  pumpInnerEl.style.animation = 'tap-bounce 280ms cubic-bezier(0.34, 1.2, 0.4, 1)';
+  setTimeout(() => { pumpInnerEl.style.animation = ''; }, 300);
 }
 function fireAura() {
   auraEl.classList.remove('fire');
   void auraEl.offsetWidth;
   auraEl.classList.add('fire');
 }
+
+// Tap depth — sustained clicks push the bread back; lack of clicks decays.
+let pumpDepth = 0;
+const PUSH_PER_CLICK = 0.10;
+const PUSH_MAX = 1.0;
+const PUSH_HALFLIFE_MS = 600;     // depth halves every 600ms when not clicked
+const PUSH_SCALE_AT_MAX = 0.70;   // pump shrinks to 70% at max depth
+let pumpDepthLast = performance.now();
+function pumpDepthFrame(now) {
+  const dt = now - pumpDepthLast;
+  pumpDepthLast = now;
+  pumpDepth *= Math.pow(0.5, dt / PUSH_HALFLIFE_MS);
+  if (pumpDepth < 0.005) pumpDepth = 0;
+  const scale = 1 - pumpDepth * (1 - PUSH_SCALE_AT_MAX);
+  pumpEl.style.transform = pumpDepth > 0 ? `scale(${scale})` : '';
+  requestAnimationFrame(pumpDepthFrame);
+}
+requestAnimationFrame(pumpDepthFrame);
 pumpEl.addEventListener('pointerdown', (e) => {
   const now = Date.now();
   const prevTier = comboTierIndex();
@@ -927,6 +950,7 @@ pumpEl.addEventListener('pointerdown', (e) => {
   const newTier = comboTierIndex();
   if (newTier > prevTier && newTier > 0) { fireAura(); toast(`🔥 streak ×${comboTier()}`); }
   bouncePump();
+  pumpDepth = Math.min(PUSH_MAX, pumpDepth + PUSH_PER_CLICK);
 
   const crit = Math.random() < CRIT_CHANCE;
   const gain = Math.floor(tapAmount() * (crit ? CRIT_MULT : 1));
