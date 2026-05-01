@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#3a2618">
+<title>Pumpernickel Tycoon</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
+  html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; background: linear-gradient(180deg, #2d1810 0%, #5c3a26 100%); color: #f4e9d8; touch-action: manipulation; }
+  body { display: flex; flex-direction: column; height: 100dvh; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+  header { padding: 16px; text-align: center; position: relative; }
+  .count-row { display: flex; align-items: center; justify-content: center; gap: 10px; }
+  .count { font-size: 2.4rem; font-weight: 800; letter-spacing: -0.02em; transition: transform 0.12s; }
+  .count.bump { transform: scale(1.18); }
+  .companion { font-size: 1.6rem; opacity: 0; transition: opacity 0.3s; }
+  .companion.show { opacity: 1; }
+  .label { font-size: 0.78rem; opacity: 0.65; text-transform: uppercase; letter-spacing: 0.12em; }
+  .rate { font-size: 0.8rem; opacity: 0.7; margin-top: 4px; min-height: 1.2em; }
+  .streak { font-size: 0.85rem; opacity: 0; margin-top: 6px; transition: opacity 0.2s; min-height: 1.1em; color: #ffd980; }
+  .streak.show { opacity: 0.95; }
+  main { flex: 1; display: flex; align-items: center; justify-content: center; position: relative; }
+  .pump { width: min(46vw, 220px); height: min(46vw, 220px); border-radius: 50%; background: radial-gradient(circle at 35% 30%, #8a5a3a 0%, #5c3a26 40%, #2d1810 100%); box-shadow: 0 12px 40px rgba(0,0,0,0.5), inset -10px -14px 30px rgba(0,0,0,0.6), inset 6px 6px 18px rgba(255,220,180,0.25); cursor: pointer; transition: transform 0.08s ease-out, box-shadow 0.3s; position: relative; display: flex; align-items: center; justify-content: center; font-size: min(20vw, 96px); }
+  .pump:active { transform: scale(0.92); }
+  .pump.combo-1 { box-shadow: 0 12px 40px rgba(0,0,0,0.5), inset -10px -14px 30px rgba(0,0,0,0.6), inset 6px 6px 18px rgba(255,220,180,0.25), 0 0 24px rgba(255,180,80,0.6); }
+  .pump.combo-2 { box-shadow: 0 12px 40px rgba(0,0,0,0.5), inset -10px -14px 30px rgba(0,0,0,0.6), inset 6px 6px 18px rgba(255,220,180,0.25), 0 0 36px rgba(255,140,40,0.85); animation: pulse 0.9s ease-in-out infinite; }
+  .pump.combo-3 { box-shadow: 0 12px 40px rgba(0,0,0,0.5), inset -10px -14px 30px rgba(0,0,0,0.6), inset 6px 6px 18px rgba(255,220,180,0.25), 0 0 56px rgba(255,80,20,1); animation: pulse 0.6s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+  .pump::before, .pump::after { content: ""; position: absolute; background: rgba(40,20,10,0.4); border-radius: 50%; }
+  .pump::before { width: 14%; height: 14%; top: 25%; right: 30%; }
+  .pump::after { width: 9%; height: 9%; bottom: 35%; left: 28%; }
+  .float { position: absolute; pointer-events: none; font-weight: 700; font-size: 1.4rem; color: #ffd980; text-shadow: 0 2px 6px rgba(0,0,0,0.6); animation: rise 0.9s ease-out forwards; }
+  @keyframes rise { from { opacity: 1; transform: translate(-50%, 0) scale(1); } to { opacity: 0; transform: translate(-50%, -120px) scale(1.4); } }
+  .shop { background: rgba(0,0,0,0.35); border-top: 1px solid rgba(255,220,180,0.15); padding: 12px; max-height: 50vh; overflow-y: auto; }
+  .shop-title { font-size: 0.78rem; opacity: 0.65; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 10px; padding: 0 4px; }
+  .treat { display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: rgba(255,220,180,0.06); border: 1px solid rgba(255,220,180,0.12); border-radius: 12px; margin-bottom: 8px; transition: background 0.15s, transform 0.08s; }
+  .treat:active { transform: scale(0.98); }
+  .treat.affordable { background: rgba(255,220,180,0.14); border-color: rgba(255,220,180,0.35); }
+  .treat.locked { opacity: 0.5; pointer-events: none; }
+  .treat.maxed { display: none; }
+  .icon { font-size: 1.8rem; width: 44px; text-align: center; flex-shrink: 0; }
+  .info { flex: 1; min-width: 0; }
+  .name { font-weight: 700; font-size: 0.95rem; }
+  .desc { font-size: 0.75rem; opacity: 0.7; margin-top: 2px; }
+  .meta { text-align: right; flex-shrink: 0; }
+  .price { font-weight: 700; font-size: 0.95rem; color: #ffd980; }
+  .owned { font-size: 0.7rem; opacity: 0.65; margin-top: 2px; min-height: 0.9rem; }
+  .toast { position: fixed; bottom: 60vh; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.9); padding: 10px 16px; border-radius: 10px; font-size: 0.85rem; opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 100; max-width: 90vw; text-align: center; }
+  .toast.show { opacity: 1; }
+  .topbtn { position: fixed; top: 8px; background: rgba(0,0,0,0.4); color: rgba(255,255,255,0.7); border: none; padding: 6px 10px; border-radius: 6px; font-size: 0.7rem; cursor: pointer; z-index: 50; }
+  .topbtn:hover { color: #fff; background: rgba(0,0,0,0.6); }
+  #ach-btn { left: 8px; }
+  #reset { right: 8px; font-size: 0.65rem; color: rgba(255,255,255,0.5); }
+  .event-banner { position: fixed; top: calc(env(safe-area-inset-top) + 12px); left: 50%; transform: translateX(-50%) translateY(-20px); padding: 10px 16px; background: rgba(40,20,10,0.94); border: 1px solid rgba(255,220,180,0.35); border-radius: 10px; max-width: 90vw; font-size: 0.85rem; z-index: 200; opacity: 0; transition: opacity 0.3s, transform 0.3s; pointer-events: none; }
+  .event-banner.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .event-banner.kind-buff { border-color: rgba(120,200,120,0.6); }
+  .event-banner.kind-debuff { border-color: rgba(220,120,120,0.6); }
+  .event-banner.kind-instant, .event-banner.kind-instant_pct { border-color: rgba(255,200,100,0.6); }
+  .ach-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 300; display: none; align-items: center; justify-content: center; padding: 20px; }
+  .ach-modal.show { display: flex; }
+  .ach-card { background: linear-gradient(180deg, #3a2618 0%, #2d1810 100%); border: 1px solid rgba(255,220,180,0.25); border-radius: 14px; padding: 18px; max-width: 520px; max-height: 85vh; width: 100%; overflow-y: auto; position: relative; }
+  .ach-close { position: absolute; top: 8px; right: 12px; background: none; border: none; color: rgba(255,255,255,0.6); font-size: 1.4rem; cursor: pointer; }
+  .ach-title { font-size: 1.05rem; font-weight: 800; margin-bottom: 4px; }
+  .ach-sub { font-size: 0.78rem; opacity: 0.65; margin-bottom: 14px; }
+  .ach-row { display: flex; gap: 10px; padding: 8px 4px; border-bottom: 1px solid rgba(255,220,180,0.08); }
+  .ach-row:last-child { border-bottom: none; }
+  .ach-row .icon { font-size: 1.4rem; width: 32px; }
+  .ach-row.locked { opacity: 0.45; }
+  .ach-row .name { font-size: 0.88rem; font-weight: 700; }
+  .ach-row .desc { font-size: 0.72rem; opacity: 0.7; margin-top: 1px; }
+</style>
+</head>
+<body>
+  <header>
+    <div class="label">Pumpernickels</div>
+    <div class="count-row">
+      <div class="count" id="count">0</div>
+      <span class="companion" id="companion">🐣</span>
+    </div>
+    <div class="rate" id="rate"></div>
+    <div class="streak" id="streak"></div>
+  </header>
+  <main>
+    <div class="pump" id="pump" role="button" aria-label="Tap to collect a pumpernickel">🍞</div>
+  </main>
+  <section class="shop">
+    <div class="shop-title">Treats</div>
+    <div id="treats"></div>
+  </section>
+  <button class="topbtn" id="ach-btn" aria-label="Achievements">🏆 <span id="ach-count">0/14</span></button>
+  <button class="topbtn" id="reset" aria-label="Reset save">RESET</button>
+  <div class="toast" id="toast"></div>
+  <div class="event-banner" id="event-banner"></div>
+  <div class="ach-modal" id="ach-modal" role="dialog" aria-label="Achievements">
+    <div class="ach-card">
+      <button class="ach-close" id="ach-close" aria-label="Close">×</button>
+      <div class="ach-title">🏆 Achievements</div>
+      <div class="ach-sub" id="ach-sub">0 of 14</div>
+      <div id="ach-list"></div>
+    </div>
+  </div>
+<script>
+const TREATS = [
+  { id: 'apprentice', icon: '🧑‍🍳', name: 'Apprentice Baker', desc: '+1 pumpernickel / sec', cost: 10, costGrowth: 1.15, rate: 1 },
+  { id: 'oven',       icon: '🔥', name: 'Stone Oven',       desc: '+5 / sec, runs hot',  cost: 75, costGrowth: 1.18, rate: 5 },
+  { id: 'cow',        icon: '🐄', name: 'Bread Cow',         desc: '+25 / sec, moos',     cost: 500, costGrowth: 1.20, rate: 25 },
+  { id: 'wizard',     icon: '🧙', name: 'Pumpernickel Wizard', desc: '+150 / sec',        cost: 4000, costGrowth: 1.22, rate: 150 },
+  { id: 'factory',    icon: '🏭', name: 'Bread Factory',     desc: '+1000 / sec',         cost: 30000, costGrowth: 1.25, rate: 1000 },
+  { id: 'tap2',       icon: '👆', name: 'Sharper Fingers',   desc: '+1 per tap',           cost: 50, costGrowth: 2.0, tapBonus: 1, max: 25 },
+  { id: 'shower',     icon: '🌧️', name: 'Pumpernickel Rain', desc: 'Instant +1000',        cost: 250, costGrowth: 2.5, instant: 1000 },
+  { id: 'egg',        icon: '🥚', name: 'Hatch a Tinyclaw',  desc: 'companion. occasionally winks.', cost: 50000, costGrowth: 999, max: 1, hatch: true },
+  { id: 'crowncake',  icon: '👑', name: 'Crown of the Tinyclaw', desc: 'a treat fit for a small dragon', cost: 100000, costGrowth: 999, max: 1 },
+];
+
+const EVENTS = [
+  { id: 'cow_runs',       copy: 'the bread cow ran off. -50% rate for 30s',           kind: 'debuff',      duration: 30000, mult: 0.5 },
+  { id: 'tinyclaw_help',  copy: 'tinyclaw stopped by and helped knead. x5 rate for 15s', kind: 'buff',     duration: 15000, mult: 5 },
+  { id: 'tip',            copy: 'a customer tipped. unclear why. +250',                kind: 'instant',     amount: 250 },
+  { id: 'oven_hot',       copy: 'the oven runs hot. x2 rate for 20s',                 kind: 'buff',        duration: 20000, mult: 2 },
+  { id: 'tinyclaw_steal', copy: 'tinyclaw appeared and ate 10% of the stockpile',     kind: 'instant_pct', factor: -0.10 },
+  { id: 'wizard_chant',   copy: 'the wizard chanted something. +500',                 kind: 'instant',     amount: 500 },
+  { id: 'cow_returns',    copy: 'the bread cow returned with friends. x3 for 25s',    kind: 'buff',        duration: 25000, mult: 3 },
+  { id: 'mouse',          copy: 'a mouse. -100. unsurprising.',                       kind: 'instant',     amount: -100 },
+];
+
+const ACHIEVEMENTS = [
+  { id: 'first_tap', icon: '👇', name: 'first crumb',         desc: 'welcome to the gluten lifestyle.',                            check: s => s.totalTaps >= 1 },
+  { id: 'tap_100',   icon: '✋', name: 'finger committed',     desc: 'wrist developing opinions.',                                  check: s => s.totalTaps >= 100 },
+  { id: 'k1',        icon: '🌾', name: 'first kilonickel',     desc: 'small bakery.',                                               check: s => s.lifetime >= 1000 },
+  { id: 'k100',      icon: '🥖', name: 'mid-game economy',     desc: 'regional bread power.',                                       check: s => s.lifetime >= 100000 },
+  { id: 'm1',        icon: '🍞', name: 'megaloaf',             desc: 'carbohydrate hegemony.',                                      check: s => s.lifetime >= 1e6 },
+  { id: 'first_baker', icon: '🧑‍🍳', name: 'hired help',     desc: 'they have questions about wages.',                            check: s => (s.owned.apprentice||0) >= 1 },
+  { id: 'cow',       icon: '🐄', name: 'mooo',                 desc: 'ethically ambiguous but productive.',                         check: s => (s.owned.cow||0) >= 1 },
+  { id: 'wizard',    icon: '🧙', name: 'arcane bakery',        desc: 'union rules unclear.',                                        check: s => (s.owned.wizard||0) >= 1 },
+  { id: 'streak_25', icon: '🔥', name: 'sharp tap',            desc: 'impressive wrist.',                                            check: s => s.longestStreak >= 25 },
+  { id: 'streak_50', icon: '⚡', name: 'speed demon',          desc: 'genuinely concerning.',                                        check: s => s.longestStreak >= 50 },
+  { id: 'lucky',     icon: '🍀', name: 'got lucky',            desc: 'three buffs in a row. statistically suspicious.',             check: s => s.buffsConsecutive >= 3 },
+  { id: 'long_haul', icon: '⏳', name: 'long haul',            desc: 'played for 24 hours. hello.',                                 check: s => (Date.now() - s.startedAt) >= 24*3600*1000 },
+  { id: 'crown',     icon: '👑', name: 'crowned',              desc: 'the kingdom kneels.',                                          check: s => (s.owned.crowncake||0) >= 1 },
+  { id: 'egg',       icon: '🐣', name: 'eggcellent decision',  desc: 'she winks at you sometimes.',                                  check: s => s.hasEgg === true, hidden: true },
+];
+
+// Tunables — change these to retune balance.
+const SAVE_KEY = 'pumpernickel-save-v2';
+const SAVE_KEY_V1 = 'pumpernickel-save-v1';
+const COMBO_RESET_MS = 800;
+const COMBO_THRESHOLDS = [10, 25, 50];   // [combo-1, combo-2, combo-3] streak entry
+const COMBO_MULTIPLIERS = [1, 2, 3, 5];  // 1 → tier1=2 → tier2=3 → tier3=5 (deliberate skip of 4 for dramatic top tier)
+const EVENT_MIN_MS = 30000;
+const EVENT_MAX_MS = 90000;
+const FIRST_EVENT_DELAY = 60000;
+const TOAST_MS = 1800;
+const BANNER_MS = 4500;
+const BANNER_GAP_MS = 350;
+const WINK_MIN_MS = 8000;
+const WINK_MAX_MS = 15000;
+const WINK_DURATION_MS = 400;
+const HAPTIC_MS = 8;
+const OFFLINE_CAP_SEC = 8 * 3600;
+const SAVE_INTERVAL_MS = 5000;
+const TICK_MS = 1000;
+
+function defaultState() {
+  return {
+    count: 0, owned: {}, lifetime: 0, lastTick: Date.now(),
+    achievements: {}, totalTaps: 0, longestStreak: 0,
+    buffsConsecutive: 0, startedAt: Date.now(), hasEgg: false,
+    activeEffects: [], saveVersion: 2,
+  };
+}
+
+let state = defaultState();
+let streakCount = 0;
+let lastTapTime = 0;
+let streakResetTimer = null;
+let lastRenderedCount = -1;
+let lastRenderedRate = -1;
+let lastStreakTier = -1;
+
+function load() {
+  let raw = localStorage.getItem(SAVE_KEY);
+  let isV1 = false;
+  if (!raw) { raw = localStorage.getItem(SAVE_KEY_V1); isV1 = !!raw; }
+  if (!raw) return;
+  try {
+    const s = JSON.parse(raw);
+    // Defensive type validation — tampered or truncated saves shouldn't crash later lookups.
+    state.count = typeof s.count === 'number' ? s.count : 0;
+    state.lifetime = typeof s.lifetime === 'number' ? s.lifetime : 0;
+    state.owned = (s.owned && typeof s.owned === 'object') ? s.owned : {};
+    state.achievements = (s.achievements && typeof s.achievements === 'object') ? s.achievements : {};
+    state.totalTaps = typeof s.totalTaps === 'number' ? s.totalTaps : 0;
+    state.longestStreak = typeof s.longestStreak === 'number' ? s.longestStreak : 0;
+    state.buffsConsecutive = typeof s.buffsConsecutive === 'number' ? s.buffsConsecutive : 0;
+    state.startedAt = typeof s.startedAt === 'number' ? s.startedAt : Date.now();
+    state.hasEgg = !!s.hasEgg;
+    state.activeEffects = Array.isArray(s.activeEffects) ? s.activeEffects : [];
+    state.lastTick = typeof s.lastTick === 'number' ? s.lastTick : Date.now();
+    state.saveVersion = 2;
+    if (isV1) { localStorage.removeItem(SAVE_KEY_V1); save(); }
+    const dt = Math.min((Date.now() - state.lastTick) / 1000, OFFLINE_CAP_SEC);
+    const offlineGain = Math.floor(dt * passiveRate());
+    if (offlineGain > 0) { state.count += offlineGain; state.lifetime += offlineGain; toast(`+${fmt(offlineGain)} while you were gone`); }
+  } catch {}
+  state.lastTick = Date.now();
+}
+function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch {} }
+function fmt(n) {
+  n = Math.floor(n);
+  if (n < 1000) return String(n);
+  if (n < 1e6) return (n/1000).toFixed(2).replace(/\.?0+$/, '') + 'K';
+  if (n < 1e9) return (n/1e6).toFixed(2).replace(/\.?0+$/, '') + 'M';
+  return (n/1e9).toFixed(2).replace(/\.?0+$/, '') + 'B';
+}
+function passiveRate() {
+  return TREATS.filter(t => t.rate).reduce((s, t) => s + (t.rate * (state.owned[t.id] || 0)), 0);
+}
+function effectMultiplier() {
+  const now = Date.now();
+  let m = 1;
+  for (const e of state.activeEffects) if (now < e.expiresAt) m *= e.mult;
+  return m;
+}
+function rate() { return passiveRate() * effectMultiplier(); }
+function comboTier() {
+  // Walk thresholds high→low, return matching multiplier index.
+  for (let i = COMBO_THRESHOLDS.length - 1; i >= 0; i--) {
+    if (streakCount >= COMBO_THRESHOLDS[i]) return COMBO_MULTIPLIERS[i + 1];
+  }
+  return COMBO_MULTIPLIERS[0];
+}
+function comboTierIndex() {
+  for (let i = COMBO_THRESHOLDS.length - 1; i >= 0; i--) {
+    if (streakCount >= COMBO_THRESHOLDS[i]) return i + 1;
+  }
+  return 0;
+}
+function tapAmount() {
+  const bonus = TREATS.filter(t => t.tapBonus).reduce((s, t) => s + (t.tapBonus * (state.owned[t.id] || 0)), 0);
+  return (1 + bonus) * comboTier() * effectMultiplier();
+}
+function priceOf(t) { return Math.ceil(t.cost * Math.pow(t.costGrowth, state.owned[t.id] || 0)); }
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(() => el.classList.remove('show'), TOAST_MS);
+}
+function setPumpEmoji() {
+  pumpEl.textContent = state.owned.crowncake ? '👑' : '🍞';
+}
+
+const countEl = document.getElementById('count');
+const rateEl = document.getElementById('rate');
+const streakEl = document.getElementById('streak');
+const pumpEl = document.getElementById('pump');
+const treatsEl = document.getElementById('treats');
+const companionEl = document.getElementById('companion');
+const bannerEl = document.getElementById('event-banner');
+const achBtnEl = document.getElementById('ach-btn');
+const achCountEl = document.getElementById('ach-count');
+const achModalEl = document.getElementById('ach-modal');
+const achListEl = document.getElementById('ach-list');
+const achSubEl = document.getElementById('ach-sub');
+
+const treatRowsById = {}; // built once by buildTreatRows()
+
+function buildTreatRows() {
+  treatsEl.innerHTML = '';
+  for (const t of TREATS) {
+    const div = document.createElement('div');
+    div.className = 'treat locked';
+    div.dataset.id = t.id;
+    div.innerHTML = `
+      <div class="icon">${t.icon}</div>
+      <div class="info"><div class="name">${t.name}</div><div class="desc">${t.desc}</div></div>
+      <div class="meta"><div class="price"></div><div class="owned"></div></div>`;
+    div.addEventListener('click', () => buy(t));
+    treatsEl.appendChild(div);
+    treatRowsById[t.id] = {
+      el: div,
+      priceEl: div.querySelector('.price'),
+      ownedEl: div.querySelector('.owned'),
+    };
+  }
+  refreshTreats();
+}
+function refreshTreats() {
+  for (const t of TREATS) {
+    const row = treatRowsById[t.id];
+    if (!row) continue;
+    const owned = state.owned[t.id] || 0;
+    if (t.max && owned >= t.max) {
+      row.el.className = 'treat maxed';
+      continue;
+    }
+    const price = priceOf(t);
+    row.el.className = 'treat ' + (state.count >= price ? 'affordable' : 'locked');
+    row.priceEl.textContent = fmt(price);
+    row.ownedEl.textContent = owned ? `×${owned}` : '';
+  }
+}
+function renderCount() {
+  // Only update DOM if count actually moved — saves the bump-pulse-every-tick problem.
+  const c = Math.floor(state.count);
+  if (c !== lastRenderedCount) {
+    countEl.textContent = fmt(c);
+    countEl.classList.add('bump');
+    setTimeout(() => countEl.classList.remove('bump'), 120);
+    lastRenderedCount = c;
+  }
+  const r = rate();
+  if (r !== lastRenderedRate) {
+    rateEl.textContent = r > 0 ? `+${fmt(r)} / sec` : '';
+    lastRenderedRate = r;
+  }
+  companionEl.classList.toggle('show', !!state.hasEgg);
+}
+function renderStreak() {
+  // Only the tap path + streak-reset path call this — not the per-second tick.
+  const tier = comboTierIndex();
+  if (tier === lastStreakTier && streakCount < 5) return;
+  if (streakCount >= 5) {
+    streakEl.textContent = tier > 0 ? `🔥 ×${comboTier()} (streak ${streakCount})` : `streak ${streakCount}`;
+    streakEl.classList.add('show');
+  } else {
+    streakEl.classList.remove('show');
+  }
+  pumpEl.classList.toggle('combo-1', tier === 1);
+  pumpEl.classList.toggle('combo-2', tier === 2);
+  pumpEl.classList.toggle('combo-3', tier === 3);
+  lastStreakTier = tier;
+}
+function renderAchPanel() {
+  achListEl.innerHTML = '';
+  let earned = 0;
+  for (const a of ACHIEVEMENTS) {
+    const got = !!state.achievements[a.id];
+    if (got) earned++;
+    const hideMe = a.hidden && !got;
+    const row = document.createElement('div');
+    row.className = 'ach-row ' + (got ? 'earned' : 'locked');
+    row.innerHTML = `
+      <div class="icon">${hideMe ? '❓' : a.icon}</div>
+      <div class="info">
+        <div class="name">${hideMe ? '???' : a.name}</div>
+        <div class="desc">${hideMe ? '???' : a.desc}</div>
+      </div>`;
+    achListEl.appendChild(row);
+  }
+  achSubEl.textContent = `${earned} of ${ACHIEVEMENTS.length}`;
+  achCountEl.textContent = `${earned}/${ACHIEVEMENTS.length}`;
+}
+function buy(t) {
+  const price = priceOf(t);
+  if (state.count < price) return;
+  state.count -= price;
+  state.owned[t.id] = (state.owned[t.id] || 0) + 1;
+  if (t.instant) { state.count += t.instant; state.lifetime += t.instant; toast(`+${fmt(t.instant)} pumpernickels!`); }
+  if (t.hatch) { state.hasEgg = true; toast('🐣 a small dragon hatched.'); }
+  if (t.id === 'crowncake') { toast('👑 the kingdom kneels.'); setPumpEmoji(); }
+  save(); renderCount(); refreshTreats(); checkAchievements();
+}
+
+function checkAchievements() {
+  let any = false;
+  for (const a of ACHIEVEMENTS) {
+    if (state.achievements[a.id]) continue;
+    if (a.check(state)) {
+      state.achievements[a.id] = Date.now();
+      toast(`🏆 ${a.name}`);
+      any = true;
+    }
+  }
+  if (any) { save(); renderAchPanel(); }
+}
+
+// Chaos events
+let bannerQueue = [];
+let bannerShowing = false;
+function showBanner(text, kind) {
+  bannerQueue.push({ text, kind });
+  if (!bannerShowing) drainBanner();
+}
+function drainBanner() {
+  if (!bannerQueue.length) { bannerShowing = false; return; }
+  bannerShowing = true;
+  const { text, kind } = bannerQueue.shift();
+  bannerEl.className = 'event-banner kind-' + kind;
+  bannerEl.textContent = text;
+  requestAnimationFrame(() => bannerEl.classList.add('show'));
+  setTimeout(() => {
+    bannerEl.classList.remove('show');
+    setTimeout(drainBanner, BANNER_GAP_MS);
+  }, BANNER_MS);
+}
+function fireEvent() {
+  if (passiveRate() === 0) return;
+  const ev = EVENTS[Math.floor(Math.random() * EVENTS.length)];
+  if (ev.kind === 'instant') {
+    state.count = Math.max(0, state.count + ev.amount);
+    if (ev.amount > 0) state.lifetime += ev.amount;
+  } else if (ev.kind === 'instant_pct') {
+    const delta = Math.floor(state.count * ev.factor);
+    state.count = Math.max(0, state.count + delta);
+  } else if (ev.kind === 'buff' || ev.kind === 'debuff') {
+    state.activeEffects.push({ id: ev.id, expiresAt: Date.now() + ev.duration, mult: ev.mult });
+  }
+  if (ev.kind === 'buff') state.buffsConsecutive++;
+  else if (ev.kind === 'debuff' || (ev.kind === 'instant_pct' && ev.factor < 0)) state.buffsConsecutive = 0;
+  showBanner(ev.copy, ev.kind);
+  save(); renderCount(); checkAchievements();
+}
+function scheduleNextEvent() {
+  const wait = EVENT_MIN_MS + Math.random() * (EVENT_MAX_MS - EVENT_MIN_MS);
+  setTimeout(() => { fireEvent(); scheduleNextEvent(); }, wait);
+}
+
+// Companion wink
+function scheduleWink() {
+  const wait = WINK_MIN_MS + Math.random() * (WINK_MAX_MS - WINK_MIN_MS);
+  setTimeout(() => {
+    if (state.hasEgg) {
+      companionEl.textContent = '😉';
+      setTimeout(() => { companionEl.textContent = '🐣'; }, WINK_DURATION_MS);
+    }
+    scheduleWink();
+  }, wait);
+}
+
+// Tap handler
+pumpEl.addEventListener('pointerdown', (e) => {
+  const now = Date.now();
+  if (now - lastTapTime < COMBO_RESET_MS) streakCount++;
+  else streakCount = 1;
+  lastTapTime = now;
+  if (streakCount > state.longestStreak) state.longestStreak = streakCount;
+  clearTimeout(streakResetTimer);
+  streakResetTimer = setTimeout(() => { streakCount = 0; renderStreak(); }, COMBO_RESET_MS);
+
+  const gain = Math.floor(tapAmount());
+  state.count += gain; state.lifetime += gain; state.totalTaps++;
+  const rect = pumpEl.getBoundingClientRect();
+  const x = e.clientX - rect.left, y = e.clientY - rect.top;
+  const f = document.createElement('div');
+  f.className = 'float'; f.textContent = `+${fmt(gain)}`;
+  f.style.left = x + 'px'; f.style.top = y + 'px';
+  pumpEl.appendChild(f);
+  setTimeout(() => f.remove(), 900);
+  renderCount(); renderStreak(); refreshTreats(); checkAchievements();
+  if (navigator.vibrate) navigator.vibrate(HAPTIC_MS);
+});
+
+// Achievements panel
+achBtnEl.addEventListener('click', () => { renderAchPanel(); achModalEl.classList.add('show'); });
+document.getElementById('ach-close').addEventListener('click', () => achModalEl.classList.remove('show'));
+achModalEl.addEventListener('click', (e) => { if (e.target === achModalEl) achModalEl.classList.remove('show'); });
+
+document.getElementById('reset').addEventListener('click', () => {
+  if (!confirm('Reset all progress?')) return;
+  localStorage.removeItem(SAVE_KEY);
+  localStorage.removeItem(SAVE_KEY_V1);
+  state = defaultState();
+  streakCount = 0;
+  lastRenderedCount = -1; lastRenderedRate = -1; lastStreakTier = -1;
+  setPumpEmoji();
+  renderCount(); refreshTreats(); renderAchPanel();
+});
+
+// Tick — passive accumulation + treat-affordability refresh + achievement check.
+setInterval(() => {
+  const now = Date.now();
+  state.activeEffects = state.activeEffects.filter(e => now < e.expiresAt);
+  const r = passiveRate();
+  if (r > 0) { const gained = r * effectMultiplier(); state.count += gained; state.lifetime += gained; }
+  state.lastTick = now;
+  renderCount();
+  refreshTreats();
+  checkAchievements();
+}, TICK_MS);
+setInterval(save, SAVE_INTERVAL_MS);
+window.addEventListener('beforeunload', save);
+
+load();
+buildTreatRows();
+setPumpEmoji();
+renderCount();
+renderAchPanel();
+setTimeout(() => scheduleNextEvent(), FIRST_EVENT_DELAY);
+scheduleWink();
+checkAchievements();
+</script>
+</body>
+</html>
