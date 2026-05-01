@@ -237,10 +237,12 @@ const TREATS = [
   { id: 's3_citadel',    icon: '🏯', name: 'Sky Fortress',        desc: 'the citadel rises. x4 citadel rate',                    cost: 22500000000,    costGrowth: 999, max: 1, synergyTarget: 'citadel',    synergyMult: 4, requiresOwned: { citadel: 100 } },
   { id: 's3_singularity',icon: '♾️', name: 'Recursive Density',   desc: 'a loop of bread inside bread. x4',                      cost: 150000000000,   costGrowth: 999, max: 1, synergyTarget: 'singularity',synergyMult: 4, requiresOwned: { singularity: 50 } },
   { id: 's3_universe',   icon: '🪞', name: 'Mirror Dimensions',   desc: 'every universe reflected. x4 universe rate',            cost: 1100000000000,  costGrowth: 999, max: 1, synergyTarget: 'universe',   synergyMult: 4, requiresOwned: { universe: 50 } },
-  { id: 'shower',     icon: '🌧️', name: 'Pumpernickel Rain', desc: 'Instant +1000',          cost: 250,        costGrowth: 2.5,  instant: 1000 },
-  { id: 'shower2',    icon: '⛈️', name: 'Pumpernickel Storm', desc: 'Instant +50,000',       cost: 25000,      costGrowth: 2.5,  instant: 50000 },
-  { id: 'shower3',    icon: '🌊', name: 'Pumpernickel Flood', desc: 'Instant +2,500,000',    cost: 1500000,    costGrowth: 2.5,  instant: 2500000 },
-  { id: 'shower4',    icon: '☄️', name: 'Pumpernickel Comet', desc: 'Instant +100M',         cost: 80000000,   costGrowth: 2.5,  instant: 100000000 },
+  // Instant boosts — one-time each, doubles your current bank.
+  { id: 'shower',     icon: '🌧️', name: 'Pumpernickel Rain',  desc: 'one-time. doubles your current pumpernickels.', cost: 1000,         costGrowth: 999, max: 1, doubleBank: true, requiresOwned: { apprentice: 1 } },
+  { id: 'shower2',    icon: '⛈️', name: 'Pumpernickel Storm', desc: 'one-time. doubles your current pumpernickels.', cost: 100000,       costGrowth: 999, max: 1, doubleBank: true, requiresOwned: { oven: 5 } },
+  { id: 'shower3',    icon: '🌊', name: 'Pumpernickel Flood', desc: 'one-time. doubles your current pumpernickels.', cost: 5000000,      costGrowth: 999, max: 1, doubleBank: true, requiresOwned: { cow: 10 } },
+  { id: 'shower4',    icon: '☄️', name: 'Pumpernickel Comet', desc: 'one-time. doubles your current pumpernickels.', cost: 250000000,    costGrowth: 999, max: 1, doubleBank: true, requiresOwned: { wizard: 10 } },
+  { id: 'shower5',    icon: '🌠', name: 'Pumpernickel Nova',  desc: 'one-time. doubles your current pumpernickels.', cost: 10000000000,  costGrowth: 999, max: 1, doubleBank: true, requiresOwned: { factory: 10 } },
   { id: 'egg',        icon: '🥚', name: 'Hatch a Tinyclaw',   desc: 'companion. occasionally winks.', cost: 50000, costGrowth: 999, max: 1, hatch: true },
   { id: 'crowncake',  icon: '👑', name: 'Crown of the Tinyclaw', desc: 'a treat fit for a small dragon', cost: 500000, costGrowth: 999, max: 1 },
 ];
@@ -321,8 +323,17 @@ const ACH_BONUS_PER_UNLOCK = 0.01; // +1% rate per achievement
 const GOLDEN_MIN_MS = 60000;
 const GOLDEN_MAX_MS = 180000;
 const GOLDEN_LIFETIME_MS = 9000;
-const GOLDEN_BONUS_SECONDS = 60;
-const GOLDEN_BONUS_FALLBACK = 100; // floor for early game when rate=0
+const GOLDEN_BONUS_SECONDS = 180;        // 3 minutes of rate per golden
+const GOLDEN_BONUS_FALLBACK = 100;       // floor for early game when rate=0
+const GOLDEN_BUFF_DURATION_MIN = 12000;  // random buff also fires on tap
+const GOLDEN_BUFF_DURATION_MAX = 30000;
+const GOLDEN_BUFFS = [
+  { id: 'g_frenzy',    copy: 'frenzy! x7 rate',           mult: 7 },
+  { id: 'g_lucky',     copy: 'lucky streak. x3 rate',     mult: 3 },
+  { id: 'g_double',    copy: 'double or nothing. x2',     mult: 2 },
+  { id: 'g_overdrive', copy: 'overdrive. x10 rate',       mult: 10 },
+  { id: 'g_fizzle',    copy: 'fizzle. x1.5 (it tried.)',  mult: 1.5 },
+];
 const ASCEND_THRESHOLD = 1e9;       // 1B lifetime to unlock first ascension
 const CROWN_DIVISOR = 1e9;          // crowns earned = floor(sqrt(lifetime / divisor))
 const CROWN_BONUS_PER = 0.05;       // each crown adds +5% to global rate
@@ -671,6 +682,15 @@ function buy(t) {
   state.count -= price;
   state.owned[t.id] = (state.owned[t.id] || 0) + 1;
   if (t.instant) { state.count += t.instant; state.lifetime += t.instant; toast(`+${fmt(t.instant)} pumpernickels!`); }
+  if (t.doubleBank) {
+    // Final bank = 2× pre-purchase bank. state.count just had `price` subtracted,
+    // so add (pre + price) to land at 2*pre.
+    const pre = state.count + price;
+    const delta = pre + price;
+    state.count += delta;
+    state.lifetime += delta;
+    toast(`✨ bank doubled. +${fmt(delta)}`);
+  }
   if (t.hatch) { state.hasEgg = true; toast('🐣 a small dragon hatched.'); }
   if (t.id === 'crowncake') { toast('👑 the kingdom kneels.'); setPumpEmoji(); }
   SFX.buy();
@@ -792,8 +812,13 @@ goldenEl.addEventListener('pointerdown', (e) => {
   const gain = Math.max(Math.floor(baseRate * GOLDEN_BONUS_SECONDS), GOLDEN_BONUS_FALLBACK);
   state.count += gain; state.lifetime += gain;
   state.goldensClicked = (state.goldensClicked || 0) + 1;
+  // Roll a random buff to fire alongside the instant grant.
+  const buff = GOLDEN_BUFFS[Math.floor(Math.random() * GOLDEN_BUFFS.length)];
+  const dur = GOLDEN_BUFF_DURATION_MIN + Math.random() * (GOLDEN_BUFF_DURATION_MAX - GOLDEN_BUFF_DURATION_MIN);
+  state.activeEffects.push({ id: buff.id, expiresAt: Date.now() + dur, mult: buff.mult });
+  state.buffsConsecutive = (state.buffsConsecutive || 0) + 1;
   SFX.golden();
-  toast(`✨ golden pumpernickel! +${fmt(gain)}`);
+  toast(`✨ +${fmt(gain)} · ${buff.copy} (${Math.round(dur/1000)}s)`);
   // Burst of crit-styled crumb particles at the click point.
   const r = goldenEl.getBoundingClientRect();
   const cx = r.left + r.width / 2, cy = r.top + r.height / 2;

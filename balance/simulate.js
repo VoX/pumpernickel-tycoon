@@ -43,10 +43,11 @@ const TREATS = [
   { id: 's3_citadel',    cost: 22500000000,    costGrowth: 999, max: 1, synergyTarget: 'citadel',    synergyMult: 4, requiresOwned: { citadel: 100 } },
   { id: 's3_singularity',cost: 150000000000,   costGrowth: 999, max: 1, synergyTarget: 'singularity',synergyMult: 4, requiresOwned: { singularity: 50 } },
   { id: 's3_universe',   cost: 1100000000000,  costGrowth: 999, max: 1, synergyTarget: 'universe',   synergyMult: 4, requiresOwned: { universe: 50 } },
-  { id: 'shower',      cost: 250,       costGrowth: 2.5,  instant: 1000 },
-  { id: 'shower2',     cost: 25000,     costGrowth: 2.5,  instant: 50000 },
-  { id: 'shower3',     cost: 1500000,   costGrowth: 2.5,  instant: 2500000 },
-  { id: 'shower4',     cost: 80000000,  costGrowth: 2.5,  instant: 100000000 },
+  { id: 'shower',      cost: 1000,         costGrowth: 999, max: 1, doubleBank: true, requiresOwned: { apprentice: 1 } },
+  { id: 'shower2',     cost: 100000,       costGrowth: 999, max: 1, doubleBank: true, requiresOwned: { oven: 5 } },
+  { id: 'shower3',     cost: 5000000,      costGrowth: 999, max: 1, doubleBank: true, requiresOwned: { cow: 10 } },
+  { id: 'shower4',     cost: 250000000,    costGrowth: 999, max: 1, doubleBank: true, requiresOwned: { wizard: 10 } },
+  { id: 'shower5',     cost: 10000000000,  costGrowth: 999, max: 1, doubleBank: true, requiresOwned: { factory: 10 } },
   { id: 'egg',         cost: 50000,     costGrowth: 999,  max: 1 },
   { id: 'crowncake',   cost: 500000,    costGrowth: 999,  max: 1 },
 ];
@@ -105,52 +106,117 @@ function affordable(state, t) {
   return state.count >= priceOf(t, state.owned[t.id] || 0);
 }
 
-// Strategies — each takes (state) and either taps, buys, or waits.
-
-function strategySpamTap(state) {
-  // Tap 5x/sec, buy whenever any rate-upgrade is affordable.
-  for (let i = 0; i < 5; i++) state.count += tapAmount(state);
-  const t = bestRateBuy(state);
-  if (t && affordable(state, t)) {
-    state.count -= priceOf(t, state.owned[t.id] || 0);
-    state.owned[t.id] = (state.owned[t.id] || 0) + 1;
+function buyTreat(state, t) {
+  const price = priceOf(t, state.owned[t.id] || 0);
+  state.count -= price;
+  state.owned[t.id] = (state.owned[t.id] || 0) + 1;
+  if (t.doubleBank) {
+    // Apply 2× bank effect (mirrors index.html buy()).
+    const pre = state.count + price;
+    const delta = pre + price;
+    state.count += delta;
+    state.lifetime += delta;
   }
 }
 
+// Track simple achievement unlocks for the +1% bonus.
+function checkAchievements(state) {
+  const lts = state.lifetime;
+  const unlocked = state.achievements;
+  const adds = [];
+  if (!unlocked.first_tap && state.totalTaps >= 1) adds.push('first_tap');
+  if (!unlocked.tap_100 && state.totalTaps >= 100) adds.push('tap_100');
+  if (!unlocked.k1 && lts >= 1e3) adds.push('k1');
+  if (!unlocked.k100 && lts >= 1e5) adds.push('k100');
+  if (!unlocked.m1 && lts >= 1e6) adds.push('m1');
+  if (!unlocked.first_baker && (state.owned.apprentice||0) >= 1) adds.push('first_baker');
+  if (!unlocked.late_game && (state.owned.universe||0) >= 1) adds.push('late_game');
+  for (const id of adds) unlocked[id] = true;
+}
+function achBonus(state) { return Object.keys(state.achievements || {}).length * 0.01; }
+function globalMult(state) { return 1 + achBonus(state); } // crowns / events not modeled in single-run sim
+
+function effectiveRate(state) { return passiveRate(state) * globalMult(state); }
+
+// Golden Pumpernickel model — fires every 60-180s on average (use 120s).
+// Awards 180s of baseline rate (post-crit-and-buff revision).
+function tickGolden(state) {
+  state.goldenTimer = (state.goldenTimer || 0) - 1;
+  if (state.goldenTimer <= 0) {
+    state.goldenTimer = 60 + Math.floor(Math.random() * 120);
+    if (passiveRate(state) > 0) {
+      const gain = Math.max(180 * effectiveRate(state), 100);
+      state.count += gain;
+      state.lifetime += gain;
+    }
+  }
+}
+
+// Strategies — each takes (state) and either taps, buys, or waits.
+
+function strategySpamTap(state) {
+  for (let i = 0; i < 5; i++) state.count += tapAmount(state);
+  state.totalTaps += 5;
+  const t = bestRateBuy(state);
+  if (t && affordable(state, t)) buyTreat(state, t);
+}
+
 function strategySteadyBuy(state) {
-  // Tap 1x/sec, buy aggressively.
   state.count += tapAmount(state);
+  state.totalTaps += 1;
   while (true) {
     const t = bestRateBuy(state);
     if (!t || !affordable(state, t)) break;
-    state.count -= priceOf(t, state.owned[t.id] || 0);
-    state.owned[t.id] = (state.owned[t.id] || 0) + 1;
+    buyTreat(state, t);
   }
 }
 
 function strategyIdle(state) {
-  // No taps. Buy when affordable.
   const t = bestRateBuy(state);
-  if (t && affordable(state, t)) {
-    state.count -= priceOf(t, state.owned[t.id] || 0);
-    state.owned[t.id] = (state.owned[t.id] || 0) + 1;
+  if (t && affordable(state, t)) buyTreat(state, t);
+}
+
+// Casual: 30 taps every 5min (300s), otherwise idle. Buys best-rate when
+// affordable, plus opportunistically buys doubleBank instants when bank
+// is at least 2× the cost (real value gain).
+function strategyCasual(state) {
+  state.casualBurst = (state.casualBurst || 0) - 1;
+  if (state.casualBurst <= 0 && Math.random() < 1 / 300) {
+    state.casualBurst = 30;
   }
+  if (state.casualBurst > 0) {
+    state.count += tapAmount(state);
+    state.totalTaps += 1;
+    state.casualBurst -= 1;
+  }
+  // Try doubleBank instants when bank is fat
+  for (const t of TREATS) {
+    if (!t.doubleBank) continue;
+    if ((state.owned[t.id] || 0) >= 1) continue;
+    if (!meetsReq(state, t)) continue;
+    const price = priceOf(t, 0);
+    if (state.count >= price * 2) buyTreat(state, t);
+  }
+  const t = bestRateBuy(state);
+  if (t && affordable(state, t)) buyTreat(state, t);
 }
 
 function simulate(name, stepFn, maxSeconds = 86400) {
-  const state = { count: 0, owned: {}, lifetime: 0 };
+  const state = { count: 0, owned: {}, lifetime: 0, achievements: {}, totalTaps: 0 };
   const hits = {};
   for (let s = 0; s < maxSeconds; s++) {
-    const r = passiveRate(state);
+    const r = effectiveRate(state);
     state.count += r;
     state.lifetime += r;
+    tickGolden(state);
     stepFn(state);
+    checkAchievements(state);
     state.lifetime = Math.max(state.lifetime, state.count);
     for (const m of MILESTONES) {
       if (!hits[m] && state.lifetime >= m) hits[m] = s;
     }
   }
-  return { name, hits, finalCount: Math.floor(state.count), finalRate: passiveRate(state), owned: state.owned };
+  return { name, hits, finalCount: Math.floor(state.count), finalRate: effectiveRate(state), owned: state.owned, achievements: state.achievements };
 }
 
 function fmtTime(s) {
@@ -166,6 +232,7 @@ const results = [
   simulate('spam-tap', strategySpamTap),
   simulate('steady-buy', strategySteadyBuy),
   simulate('idle', strategyIdle),
+  simulate('casual', strategyCasual),
 ];
 
 console.log('# Pumpernickel Tycoon balance — 24h simulation\n');
