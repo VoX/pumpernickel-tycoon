@@ -105,6 +105,14 @@
   .ach-row:last-child { border-bottom: none; }
   .ach-row .icon { font-size: 1.4rem; width: 32px; }
   .ach-row.locked { opacity: 0.45; }
+  /* Menu tabs (achievements / shop / ascend live in one modal). */
+  .menu-tabs { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 1px solid rgba(255,220,180,0.15); }
+  .menu-tab { flex: 1; background: transparent; border: none; color: rgba(255,255,255,0.6); padding: 10px 6px; font-size: 0.85rem; font-weight: 700; cursor: pointer; border-bottom: 2px solid transparent; transition: color 0.15s, border-color 0.15s; }
+  .menu-tab:hover:not(:disabled) { color: rgba(255,255,255,0.9); }
+  .menu-tab.active { color: #ffd980; border-bottom-color: #ffd980; }
+  .menu-tab:disabled { opacity: 0.35; cursor: not-allowed; }
+  .menu-tab .tab-label { font-size: 0.8em; }
+  .menu-pane[hidden] { display: none; }
   .ach-row .name { font-size: 0.88rem; font-weight: 700; }
   .ach-row .desc { font-size: 0.72rem; opacity: 0.7; margin-top: 1px; }
   .shop-buy { border: none; border-radius: 10px; padding: 6px 10px; font-weight: 800; min-width: 64px; cursor: pointer; color: #2d1810; background: linear-gradient(180deg, #d4a93a, #a87a18); transition: background 0.2s, transform 0.1s; }
@@ -152,10 +160,6 @@
     <div class="rate" id="rate"></div>
     <div class="streak" id="streak"></div>
     <div class="effects" id="effects" aria-label="Active effects"></div>
-    <div class="header-actions">
-      <button class="header-btn" id="shop-btn" aria-label="Crown Shop" hidden>🪙 <span id="shop-info">Shop</span></button>
-      <button class="header-btn" id="ascend-btn" aria-label="Ascend the Tinyclaw" hidden>👑 <span id="ascend-info">Ascend</span></button>
-    </div>
   </header>
   <main>
     <div class="pump" id="pump" role="button" aria-label="Tap to collect a pumpernickel"><span class="pump-inner" id="pump-inner">🍞<span class="pump-aura" id="pump-aura" aria-hidden="true"></span></span></div>
@@ -165,7 +169,7 @@
     <div class="shop-title">Treats</div>
     <div id="treats"></div>
   </section>
-  <button class="topbtn" id="ach-btn" aria-label="Achievements">🏆 <span id="ach-count"></span></button>
+  <button class="topbtn" id="menu-btn" aria-label="Menu">☰ <span id="menu-info"></span></button>
   <button class="topbtn" id="help-btn" aria-label="How to play">?</button>
   <button class="topbtn" id="mute-btn" aria-label="Toggle sound">🔊</button>
   <button class="topbtn" id="reset" aria-label="Reset save">RESET</button>
@@ -173,29 +177,27 @@
   <div class="event-banner" id="event-banner"></div>
   <div class="golden" id="golden" role="button" aria-label="Golden Pumpernickel">🥯</div>
   <div class="ascend-flash" id="ascend-flash"></div>
-  <div class="ach-modal" id="ach-modal" role="dialog" aria-label="Achievements">
+  <div class="ach-modal" id="menu-modal" role="dialog" aria-label="Menu">
     <div class="ach-card">
-      <button class="ach-close" id="ach-close" aria-label="Close">×</button>
-      <div class="ach-title">🏆 Achievements</div>
-      <div class="ach-sub" id="ach-sub"></div>
-      <div id="ach-list"></div>
-    </div>
-  </div>
-  <div class="ach-modal" id="ascend-modal" role="dialog" aria-label="Ascend">
-    <div class="ach-card">
-      <button class="ach-close" id="ascend-close" aria-label="Close">×</button>
-      <div class="ach-title">👑 Ascend the Tinyclaw</div>
-      <div class="ach-sub">trade your kingdom for crowns. each crown grants +5% rate forever.</div>
-      <div id="ascend-detail" style="font-size: 0.9rem; line-height: 1.6; padding: 6px 4px;"></div>
-      <button id="ascend-confirm" class="gold-btn" style="margin-top: 12px;">Ascend</button>
-    </div>
-  </div>
-  <div class="ach-modal" id="shop-modal" role="dialog" aria-label="Crown Shop">
-    <div class="ach-card">
-      <button class="ach-close" id="shop-close" aria-label="Close">×</button>
-      <div class="ach-title">🪙 Crown Shop</div>
-      <div class="ach-sub" id="shop-sub"></div>
-      <div id="shop-list"></div>
+      <button class="ach-close" id="menu-close" aria-label="Close">×</button>
+      <div class="menu-tabs" role="tablist">
+        <button class="menu-tab" data-tab="ach" role="tab">🏆 <span class="tab-label">Achievements</span></button>
+        <button class="menu-tab" data-tab="shop" role="tab">🪙 <span class="tab-label">Shop</span></button>
+        <button class="menu-tab" data-tab="ascend" role="tab">👑 <span class="tab-label">Ascend</span></button>
+      </div>
+      <div class="menu-pane" data-tab="ach">
+        <div class="ach-sub" id="ach-sub"></div>
+        <div id="ach-list"></div>
+      </div>
+      <div class="menu-pane" data-tab="shop" hidden>
+        <div class="ach-sub" id="shop-sub"></div>
+        <div id="shop-list"></div>
+      </div>
+      <div class="menu-pane" data-tab="ascend" hidden>
+        <div class="ach-sub">trade your kingdom for crowns. each crown grants +5% rate forever.</div>
+        <div id="ascend-detail" style="font-size: 0.9rem; line-height: 1.6; padding: 6px 4px;"></div>
+        <button id="ascend-confirm" class="gold-btn" style="margin-top: 12px;">Ascend</button>
+      </div>
     </div>
   </div>
   <div class="ach-modal" id="help-modal" role="dialog" aria-label="How to play">
@@ -547,24 +549,28 @@ const pumpEl = document.getElementById('pump');
 const treatsEl = document.getElementById('treats');
 const companionEl = document.getElementById('companion');
 const bannerEl = document.getElementById('event-banner');
-const achBtnEl = document.getElementById('ach-btn');
-const achCountEl = document.getElementById('ach-count');
-const achModalEl = document.getElementById('ach-modal');
+const menuBtnEl = document.getElementById('menu-btn');
+const menuModalEl = document.getElementById('menu-modal');
+const menuInfoEl = document.getElementById('menu-info');
+// Aliases — pre-tab refactor names still used in render functions.
+const achBtnEl = menuBtnEl;
+// achCountEl removed — menu summary now serves as combined count.
+const achModalEl = menuModalEl;
 const achListEl = document.getElementById('ach-list');
 const achSubEl = document.getElementById('ach-sub');
 
 const treatRowsById = {}; // built once by buildTreatRows()
 const bakeryEl = document.getElementById('bakery');
 const goldenEl = document.getElementById('golden');
-const ascendBtnEl = document.getElementById('ascend-btn');
-const ascendModalEl = document.getElementById('ascend-modal');
+const ascendBtnEl = menuBtnEl;       // alias — visibility-tracking goes via tab
+const ascendModalEl = menuModalEl;
 const ascendDetailEl = document.getElementById('ascend-detail');
-const ascendInfoEl = document.getElementById('ascend-info');
-const shopBtnEl = document.getElementById('shop-btn');
-const shopModalEl = document.getElementById('shop-modal');
+// ascendInfoEl removed — folded into menu summary.
+const shopBtnEl = menuBtnEl;          // alias
+const shopModalEl = menuModalEl;
 const shopSubEl = document.getElementById('shop-sub');
 const shopListEl = document.getElementById('shop-list');
-const shopInfoEl = document.getElementById('shop-info');
+// shopInfoEl removed — folded into menu summary.
 const bakeryAssetsById = {}; // built lazily by refreshBakery()
 
 // Per-baker contribution (rate × owned × stacked synergy mults).
@@ -717,7 +723,7 @@ function renderAchPanel() {
   }
   const bonus = (earned * ACH_BONUS_PER_UNLOCK * 100).toFixed(0);
   achSubEl.textContent = `${earned} of ${ACHIEVEMENTS.length} · +${bonus}% rate`;
-  achCountEl.textContent = `${earned}/${ACHIEVEMENTS.length}`;
+  refreshMenu();
 }
 function buy(t) {
   const price = priceOf(t);
@@ -992,26 +998,54 @@ pumpEl.addEventListener('pointerdown', (e) => {
   (crit ? SFX.crit : SFX.tap)();
 });
 
-// Achievements panel
-achBtnEl.addEventListener('click', () => { renderAchPanel(); achModalEl.classList.add('show'); });
-document.getElementById('ach-close').addEventListener('click', () => achModalEl.classList.remove('show'));
-achModalEl.addEventListener('click', (e) => { if (e.target === achModalEl) achModalEl.classList.remove('show'); });
+// Single menu — tabs for ach / shop / ascend.
+let activeTab = 'ach';
+function switchTab(tab) {
+  // Skip disabled tabs (shop unlocks at first ascension, ascend at 1B lifetime).
+  const tabBtn = document.querySelector(`.menu-tab[data-tab="${tab}"]`);
+  if (tabBtn && tabBtn.disabled) return;
+  activeTab = tab;
+  document.querySelectorAll('.menu-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.menu-pane').forEach(p => p.hidden = (p.dataset.tab !== tab));
+  if (tab === 'ach') renderAchPanel();
+  else if (tab === 'shop') renderShop();
+  else if (tab === 'ascend') openAscendPane();
+}
+function refreshMenu() {
+  // Tab availability gates content rather than hiding tabs.
+  const shopTab = document.querySelector('.menu-tab[data-tab="shop"]');
+  const ascendTab = document.querySelector('.menu-tab[data-tab="ascend"]');
+  shopTab.disabled = (state.ascensions || 0) < 1 && (state.crowns || 0) === 0;
+  ascendTab.disabled = state.lifetime < ASCEND_THRESHOLD && (state.crowns || 0) === 0;
+  // If active tab is now disabled, fall back to ach.
+  const activeBtn = document.querySelector(`.menu-tab[data-tab="${activeTab}"]`);
+  if (activeBtn && activeBtn.disabled) { activeTab = 'ach'; }
+  // Compact info next to ☰ — earned/total achievements + crown count when relevant.
+  const earned = Object.keys(state.achievements || {}).length;
+  const crowns = state.crowns || 0;
+  menuInfoEl.textContent = crowns > 0 ? `${earned}/${ACHIEVEMENTS.length} · ${crowns}👑` : `${earned}/${ACHIEVEMENTS.length}`;
+  // Pulse the menu button when an ascension is earnable.
+  const earnable = state.lifetime >= ASCEND_THRESHOLD ? crownsForLifetime(state.lifetime) - crowns : 0;
+  menuBtnEl.classList.toggle('pulse', earnable > 0);
+}
+menuBtnEl.addEventListener('click', () => {
+  refreshMenu();
+  switchTab(activeTab);
+  menuModalEl.classList.add('show');
+});
+document.getElementById('menu-close').addEventListener('click', () => menuModalEl.classList.remove('show'));
+menuModalEl.addEventListener('click', (e) => { if (e.target === menuModalEl) menuModalEl.classList.remove('show'); });
+document.querySelectorAll('.menu-tab').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
 
 // Prestige — ascend the tinyclaw.
 function crownsForLifetime(lifetime) {
   return Math.floor(Math.sqrt(Math.max(0, lifetime) / CROWN_DIVISOR));
 }
 function refreshAscend() {
-  const earnable = crownsForLifetime(state.lifetime);
-  const gain = earnable - (state.crowns || 0);
-  const visible = state.lifetime >= ASCEND_THRESHOLD || (state.crowns || 0) > 0;
-  ascendBtnEl.hidden = !visible;
-  ascendBtnEl.classList.toggle('pulse', gain > 0);
-  ascendInfoEl.textContent = (state.crowns || 0) > 0
-    ? `${state.crowns}👑 +${Math.round(crownBonus()*100)}%`
-    : `Ascend (+${gain}👑)`;
+  // Tab-based menu now handles visibility; just refresh the menu summary line.
+  refreshMenu();
 }
-function openAscend() {
+function openAscendPane() {
   const earnable = crownsForLifetime(state.lifetime);
   const gain = Math.max(0, earnable - (state.crowns || 0));
   const have = state.crowns || 0;
@@ -1020,12 +1054,8 @@ function openAscend() {
     ascending now grants <b>+${gain}</b> 👑 (total +${Math.round((have+gain)*CROWN_BONUS_PER*100)}%).<br>
     <span style="opacity:0.65">resets pumpernickels, bakers, eggs, and effects. keeps achievements and crowns.</span>
   `;
-  ascendModalEl.classList.add('show');
   document.getElementById('ascend-confirm').disabled = gain <= 0;
 }
-ascendBtnEl.addEventListener('click', openAscend);
-document.getElementById('ascend-close').addEventListener('click', () => ascendModalEl.classList.remove('show'));
-ascendModalEl.addEventListener('click', (e) => { if (e.target === ascendModalEl) ascendModalEl.classList.remove('show'); });
 document.getElementById('ascend-confirm').addEventListener('click', () => {
   const earnable = crownsForLifetime(state.lifetime);
   const gain = earnable - (state.crowns || 0);
@@ -1051,7 +1081,7 @@ document.getElementById('ascend-confirm').addEventListener('click', () => {
   streakCount = 0;
   lastRenderedCount = -1; lastRenderedRate = -1; lastStreakTier = -1;
   setPumpEmoji();
-  ascendModalEl.classList.remove('show');
+  menuModalEl.classList.remove('show');
   const flash = document.getElementById('ascend-flash');
   flash.classList.remove('show'); void flash.offsetWidth; flash.classList.add('show');
   SFX.ascend();
@@ -1061,8 +1091,8 @@ document.getElementById('ascend-confirm').addEventListener('click', () => {
 
 // Crown Shop — spend crowns on permanent meta-upgrades.
 function refreshShop() {
-  shopBtnEl.hidden = (state.ascensions || 0) < 1;
-  shopInfoEl.textContent = `${state.crowns || 0}👑`;
+  // Tab-based menu now handles visibility; menu summary covers crowns.
+  refreshMenu();
 }
 function renderShop() {
   shopSubEl.textContent = `you have ${state.crowns || 0}👑 to spend.`;
@@ -1105,9 +1135,6 @@ function buyShopItem(id) {
   save();
   renderShop(); refreshShop(); refreshAscend(); renderCount();
 }
-shopBtnEl.addEventListener('click', () => { renderShop(); shopModalEl.classList.add('show'); });
-document.getElementById('shop-close').addEventListener('click', () => shopModalEl.classList.remove('show'));
-shopModalEl.addEventListener('click', (e) => { if (e.target === shopModalEl) shopModalEl.classList.remove('show'); });
 
 const helpModalEl = document.getElementById('help-modal');
 document.getElementById('help-btn').addEventListener('click', () => helpModalEl.classList.add('show'));
