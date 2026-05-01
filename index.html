@@ -28,10 +28,12 @@
   main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; gap: 18px; padding: 0 12px; }
   .pump { font-size: min(36vw, 180px); cursor: pointer; transition: transform 0.08s ease-out, filter 0.25s, text-shadow 0.25s; position: relative; display: flex; align-items: center; justify-content: center; line-height: 1; padding: 16px; user-select: none; }
   .pump:active { transform: scale(0.92); }
+  .pump { will-change: transform; animation: breathe 4.5s ease-in-out infinite; }
   .pump.combo-1 { filter: drop-shadow(0 0 18px rgba(255,180,80,0.55)); }
   .pump.combo-2 { filter: drop-shadow(0 0 28px rgba(255,140,40,0.85)); animation: pulse 0.9s ease-in-out infinite; }
   .pump.combo-3 { filter: drop-shadow(0 0 44px rgba(255,80,20,1)); animation: pulse 0.6s ease-in-out infinite; }
   @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+  @keyframes breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.02); } }
   .float { position: absolute; pointer-events: none; font-weight: 700; font-size: 1.4rem; color: #ffd980; text-shadow: 0 2px 6px rgba(0,0,0,0.6); animation: rise 0.9s ease-out forwards; z-index: 5; }
   .float.crit { font-size: 2.4rem; color: #ffe066; text-shadow: 0 0 18px rgba(255,210,80,0.9), 0 2px 6px rgba(0,0,0,0.6); }
   .crumb { position: absolute; pointer-events: none; font-size: 0.7rem; opacity: 0.85; will-change: transform, opacity; }
@@ -103,9 +105,13 @@
   .asset.live .asset-icon { animation: bob var(--bob, 1.6s) ease-in-out infinite; }
 
   /* Golden Pumpernickel — random clickable bonus. */
-  .golden { position: fixed; font-size: 2.8rem; z-index: 80; cursor: pointer; filter: drop-shadow(0 0 18px rgba(255,210,80,0.95)) drop-shadow(0 0 6px rgba(255,180,40,0.8)); display: none; pointer-events: auto; user-select: none; }
-  .golden.active { display: block; animation: golden-wiggle 1.4s ease-in-out infinite; }
+  .golden { position: fixed; font-size: 2.8rem; z-index: 80; cursor: pointer; filter: drop-shadow(0 0 18px rgba(255,210,80,0.95)) drop-shadow(0 0 6px rgba(255,180,40,0.8)); pointer-events: none; user-select: none; opacity: 0; transition: opacity 0.25s; left: -200px; top: -200px; }
+  .golden.active { opacity: 1; pointer-events: auto; animation: golden-wiggle 1.4s cubic-bezier(0.5,1.4,0.4,1) infinite; }
   @keyframes golden-wiggle { 0%,100% { transform: rotate(-10deg) scale(1); } 50% { transform: rotate(10deg) scale(1.12); } }
+
+  /* Achievement unlock pop on trophy button. */
+  #ach-btn.popped { animation: ach-pop 700ms cubic-bezier(0.4,1.6,0.4,1); }
+  @keyframes ach-pop { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255,210,80,0); } 30% { transform: scale(1.25); box-shadow: 0 0 18px 6px rgba(255,210,80,0.7); } 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255,210,80,0); } }
 
   /* Ascend button pulse + ascend flash overlay. */
   #ascend-btn.pulse { animation: ascend-pulse 1.6s ease-in-out infinite; }
@@ -630,7 +636,10 @@ function checkAchievements() {
       any = true;
     }
   }
-  if (any) { save(); renderAchPanel(); }
+  if (any) {
+    save(); renderAchPanel();
+    achBtnEl.classList.remove('popped'); void achBtnEl.offsetWidth; achBtnEl.classList.add('popped');
+  }
 }
 
 // Chaos events
@@ -706,6 +715,24 @@ goldenEl.addEventListener('pointerdown', (e) => {
   state.count += gain; state.lifetime += gain;
   state.goldensClicked = (state.goldensClicked || 0) + 1;
   toast(`✨ golden pumpernickel! +${fmt(gain)}`);
+  // Burst of crit-styled crumb particles at the click point.
+  const r = goldenEl.getBoundingClientRect();
+  const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+  for (let i = 0; i < 12; i++) {
+    const c = document.createElement('div');
+    c.className = 'crumb crit';
+    c.textContent = CRUMB_GLYPHS[Math.floor(Math.random() * CRUMB_GLYPHS.length)];
+    c.style.position = 'fixed';
+    c.style.left = cx + 'px'; c.style.top = cy + 'px';
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 60 + Math.random() * 60;
+    c.style.setProperty('--cx', Math.cos(angle) * dist + 'px');
+    c.style.setProperty('--cy', Math.sin(angle) * dist + 'px');
+    c.style.setProperty('--cr', (Math.random() * 360 - 180) + 'deg');
+    c.style.animation = `crumb-fly ${CRUMB_DURATION_MIN + Math.random() * CRUMB_DURATION_RANGE}ms forwards ease-out`;
+    document.body.appendChild(c);
+    setTimeout(() => c.remove(), CRUMB_LIFETIME_MS);
+  }
   goldenEl.classList.remove('active');
   goldenExpiresAt = 0;
   renderCount(); refreshTreats(); save();
