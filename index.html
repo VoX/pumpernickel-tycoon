@@ -26,14 +26,24 @@
   .effect-pill.buff { border-color: rgba(120,200,120,0.6); color: #cfe9c9; }
   .effect-pill.debuff { border-color: rgba(220,120,120,0.6); color: #f0c4c4; }
   main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; gap: 18px; padding: 0 12px; }
-  .pump { font-size: min(36vw, 180px); cursor: pointer; transition: transform 0.08s ease-out, filter 0.25s, text-shadow 0.25s; position: relative; display: flex; align-items: center; justify-content: center; line-height: 1; padding: 16px; user-select: none; }
-  .pump:active { transform: scale(0.92); }
-  .pump { will-change: transform; animation: breathe 4.5s ease-in-out infinite; }
+  .pump { font-size: min(36vw, 180px); cursor: pointer; position: relative; display: flex; align-items: center; justify-content: center; line-height: 1; padding: 16px; user-select: none; will-change: transform; animation: breathe 4.5s ease-in-out infinite; transition: filter 0.25s, text-shadow 0.25s; }
   .pump.combo-1 { filter: drop-shadow(0 0 18px rgba(255,180,80,0.55)); }
   .pump.combo-2 { filter: drop-shadow(0 0 28px rgba(255,140,40,0.85)); animation: pulse 0.9s ease-in-out infinite; }
   .pump.combo-3 { filter: drop-shadow(0 0 44px rgba(255,80,20,1)); animation: pulse 0.6s ease-in-out infinite; }
   @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.05); } }
   @keyframes breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.02); } }
+  /* Per-tap squish + rebound. Applied via inline animation to override pulse/breathe. */
+  @keyframes tap-bounce { 0% { transform: scale(1); } 25% { transform: scale(0.86); } 60% { transform: scale(1.10); } 100% { transform: scale(1); } }
+  /* Tier-up burst — fires when crossing a combo threshold. */
+  .pump-aura { position: absolute; inset: 0; border-radius: 50%; pointer-events: none; opacity: 0; }
+  .pump-aura.fire { animation: aura-burst 700ms ease-out forwards; }
+  @keyframes aura-burst { 0% { transform: scale(0.4); opacity: 0.9; box-shadow: 0 0 0 8px rgba(255,210,80,0.7); } 100% { transform: scale(2.2); opacity: 0; box-shadow: 0 0 0 8px rgba(255,210,80,0); } }
+  /* Treat row purchase flash. */
+  .treat.buy-flash { animation: treat-flash 380ms ease-out; }
+  @keyframes treat-flash { 0% { background: rgba(255,220,100,0.8); border-color: rgba(255,220,100,1); transform: scale(1.02); } 100% { background: rgba(255,220,180,0.14); border-color: rgba(255,220,180,0.35); transform: scale(1); } }
+  /* Bakery asset pop-in when newly owned. */
+  .asset.popin { animation: asset-popin 360ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+  @keyframes asset-popin { 0% { transform: scale(0); opacity: 0; } 60% { transform: scale(1.3); opacity: 1; } 100% { transform: scale(1); } }
   .float { position: absolute; pointer-events: none; font-weight: 700; font-size: 1.4rem; color: #ffd980; text-shadow: 0 2px 6px rgba(0,0,0,0.6); animation: rise 0.9s ease-out forwards; z-index: 5; }
   .float.crit { font-size: 2.4rem; color: #ffe066; text-shadow: 0 0 18px rgba(255,210,80,0.9), 0 2px 6px rgba(0,0,0,0.6); }
   .crumb { position: absolute; pointer-events: none; font-size: 0.7rem; opacity: 0.85; will-change: transform, opacity; }
@@ -144,7 +154,7 @@
     </div>
   </header>
   <main>
-    <div class="pump" id="pump" role="button" aria-label="Tap to collect a pumpernickel">🍞</div>
+    <div class="pump" id="pump" role="button" aria-label="Tap to collect a pumpernickel">🍞<span class="pump-aura" id="pump-aura" aria-hidden="true"></span></div>
     <div class="bakery" id="bakery" aria-label="Your bakery"></div>
   </main>
   <section class="shop">
@@ -581,12 +591,13 @@ function refreshBakery() {
     }
     if (!row) {
       const el = document.createElement('span');
-      el.className = 'asset' + (live ? ' live' : '');
+      el.className = 'asset popin' + (live ? ' live' : '');
       el.dataset.id = t.id;
       if (t.bobMs) el.style.setProperty('--bob', t.bobMs + 'ms');
       el.innerHTML = `<span class="asset-icon">${t.icon}</span><span class="asset-count">×${owned}</span>`;
       el.addEventListener('click', () => toast(bakerInfo(t)));
       bakeryEl.appendChild(el);
+      setTimeout(() => el.classList.remove('popin'), 400);
       row = bakeryAssetsById[t.id] = { el, countEl: el.querySelector('.asset-count'), owned };
     }
     if (row.owned !== owned) {
@@ -722,6 +733,12 @@ function buy(t) {
   if (t.hatch) { state.hasEgg = true; toast('🐣 a small dragon hatched.'); }
   if (t.id === 'crowncake') { toast('👑 the kingdom kneels.'); setPumpEmoji(); }
   SFX.buy();
+  // Flash the treat row briefly to acknowledge the purchase.
+  const row = treatRowsById[t.id];
+  if (row && row.el) {
+    row.el.classList.remove('buy-flash'); void row.el.offsetWidth; row.el.classList.add('buy-flash');
+    setTimeout(() => row.el.classList.remove('buy-flash'), 400);
+  }
   save(); renderCount(); refreshTreats(); refreshBakery(); checkAchievements();
 }
 // Pick the rate-upgrade with the best rate-gain per pumpernickel spent.
@@ -884,14 +901,32 @@ function scheduleWink() {
 }
 
 // Tap handler
+const auraEl = document.getElementById('pump-aura');
+function bouncePump() {
+  // Inline animation overrides .pump's breathe/pulse for the duration.
+  pumpEl.style.animation = 'none';
+  void pumpEl.offsetWidth;
+  pumpEl.style.animation = 'tap-bounce 180ms cubic-bezier(0.34, 1.56, 0.64, 1)';
+  setTimeout(() => { pumpEl.style.animation = ''; }, 200);
+}
+function fireAura() {
+  auraEl.classList.remove('fire');
+  void auraEl.offsetWidth;
+  auraEl.classList.add('fire');
+}
 pumpEl.addEventListener('pointerdown', (e) => {
   const now = Date.now();
+  const prevTier = comboTierIndex();
   if (now - lastTapTime < COMBO_RESET_MS) streakCount++;
   else streakCount = 1;
   lastTapTime = now;
   if (streakCount > state.longestStreak) state.longestStreak = streakCount;
   clearTimeout(streakResetTimer);
   streakResetTimer = setTimeout(() => { streakCount = 0; renderStreak(); }, COMBO_RESET_MS);
+  // Tier-up aura burst when crossing a combo threshold.
+  const newTier = comboTierIndex();
+  if (newTier > prevTier && newTier > 0) { fireAura(); toast(`🔥 streak ×${comboTier()}`); }
+  bouncePump();
 
   const crit = Math.random() < CRIT_CHANCE;
   const gain = Math.floor(tapAmount() * (crit ? CRIT_MULT : 1));
