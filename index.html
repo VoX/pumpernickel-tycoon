@@ -75,11 +75,7 @@
   .asset .asset-count { font-weight: 700; color: #ffd980; font-size: 0.78rem; }
   .asset.bumped { transform: scale(1.18); background: rgba(255,220,180,0.22); }
   @keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
-  .asset.live .asset-icon { animation: bob 1.6s ease-in-out infinite; }
-  .asset.live[data-id="oven"] .asset-icon { animation-duration: 1.1s; }
-  .asset.live[data-id="cow"] .asset-icon { animation-duration: 1.9s; }
-  .asset.live[data-id="wizard"] .asset-icon { animation-duration: 2.4s; }
-  .asset.live[data-id="factory"] .asset-icon { animation-duration: 0.8s; }
+  .asset.live .asset-icon { animation: bob var(--bob, 1.6s) ease-in-out infinite; }
 </style>
 </head>
 <body>
@@ -114,11 +110,11 @@
   </div>
 <script>
 const TREATS = [
-  { id: 'apprentice', icon: '🧑‍🍳', name: 'Apprentice Baker', desc: '+1 pumpernickel / sec', cost: 10, costGrowth: 1.15, rate: 1 },
-  { id: 'oven',       icon: '🔥', name: 'Stone Oven',       desc: '+5 / sec, runs hot',  cost: 75, costGrowth: 1.18, rate: 5 },
-  { id: 'cow',        icon: '🐄', name: 'Bread Cow',         desc: '+25 / sec, moos',     cost: 500, costGrowth: 1.20, rate: 25 },
-  { id: 'wizard',     icon: '🧙', name: 'Pumpernickel Wizard', desc: '+150 / sec',        cost: 4000, costGrowth: 1.22, rate: 150 },
-  { id: 'factory',    icon: '🏭', name: 'Bread Factory',     desc: '+1000 / sec',         cost: 30000, costGrowth: 1.25, rate: 1000 },
+  { id: 'apprentice', icon: '🧑‍🍳', name: 'Apprentice Baker', desc: '+1 pumpernickel / sec', cost: 10, costGrowth: 1.15, rate: 1, bobMs: 1600 },
+  { id: 'oven',       icon: '🔥', name: 'Stone Oven',       desc: '+5 / sec, runs hot',  cost: 75, costGrowth: 1.18, rate: 5, bobMs: 1100 },
+  { id: 'cow',        icon: '🐄', name: 'Bread Cow',         desc: '+25 / sec, moos',     cost: 500, costGrowth: 1.20, rate: 25, bobMs: 1900 },
+  { id: 'wizard',     icon: '🧙', name: 'Pumpernickel Wizard', desc: '+150 / sec',        cost: 4000, costGrowth: 1.22, rate: 150, bobMs: 2400 },
+  { id: 'factory',    icon: '🏭', name: 'Bread Factory',     desc: '+1000 / sec',         cost: 30000, costGrowth: 1.25, rate: 1000, bobMs: 800 },
   { id: 'tap2',       icon: '👆', name: 'Sharper Fingers',   desc: '+1 per tap',           cost: 50, costGrowth: 2.0, tapBonus: 1, max: 25 },
   { id: 'shower',     icon: '🌧️', name: 'Pumpernickel Rain', desc: 'Instant +1000',        cost: 250, costGrowth: 2.5, instant: 1000 },
   { id: 'egg',        icon: '🥚', name: 'Hatch a Tinyclaw',  desc: 'companion. occasionally winks.', cost: 50000, costGrowth: 999, max: 1, hatch: true },
@@ -293,6 +289,7 @@ function refreshBakery() {
       const el = document.createElement('span');
       el.className = 'asset' + (live ? ' live' : '');
       el.dataset.id = t.id;
+      if (t.bobMs) el.style.setProperty('--bob', t.bobMs + 'ms');
       el.innerHTML = `<span class="asset-icon">${t.icon}</span><span class="asset-count">×${owned}</span>`;
       el.title = t.name;
       bakeryEl.appendChild(el);
@@ -506,7 +503,7 @@ document.getElementById('reset').addEventListener('click', () => {
   streakCount = 0;
   lastRenderedCount = -1; lastRenderedRate = -1; lastStreakTier = -1;
   setPumpEmoji();
-  renderCount(); refreshTreats(); renderAchPanel();
+  renderCount(); refreshTreats(); refreshBakery(); renderAchPanel();
 });
 
 // Tick — passive accumulation + treat-affordability refresh + achievement check.
