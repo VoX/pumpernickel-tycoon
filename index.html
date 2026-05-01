@@ -313,7 +313,7 @@ const CROWN_SHOP_ITEMS = [
   { id: 'pacing',     icon: '⏱️', name: 'Cosmic Pacing',     desc: 'chaos events fire 33% sooner.',                                cost: 8 },
   { id: 'royalLedger',icon: '📜', name: 'Royal Ledger',      desc: 'each crown contributes +6% rate instead of +5%.',              cost: 10 },
   { id: 'eternalEgg', icon: '🐣', name: 'Eternal Egg',       desc: 'the tinyclaw companion persists through every ascension.',     cost: 15 },
-  { id: 'steward',    icon: '🤵', name: 'Royal Steward',     desc: 'auto-buys the most rate-efficient treat every 5 seconds.',     cost: 30 },
+  { id: 'steward',    icon: '🤵', name: 'Royal Steward',     desc: 'auto-buys the most rate-efficient treat every 5 seconds.',     cost: 20 },
 ];
 const AUTO_BUY_INTERVAL_TICKS = 5;
 
@@ -711,7 +711,10 @@ function scheduleNextGolden() {
 goldenEl.addEventListener('pointerdown', (e) => {
   e.stopPropagation();
   if (!goldenEl.classList.contains('active')) return;
-  const gain = Math.max(Math.floor(rate() * GOLDEN_BONUS_SECONDS), GOLDEN_BONUS_FALLBACK);
+  // Use baseline (no active-buff) rate so a golden_storm/cosmic_align
+  // doesn't compound into a 10-minute jackpot per the balance review.
+  const baseRate = passiveRate() * (1 + achievementBonus() + crownBonus());
+  const gain = Math.max(Math.floor(baseRate * GOLDEN_BONUS_SECONDS), GOLDEN_BONUS_FALLBACK);
   state.count += gain; state.lifetime += gain;
   state.goldensClicked = (state.goldensClicked || 0) + 1;
   toast(`✨ golden pumpernickel! +${fmt(gain)}`);
