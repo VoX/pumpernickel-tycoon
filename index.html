@@ -157,6 +157,40 @@
   .ascend-flash { position: fixed; inset: 0; background: radial-gradient(circle at center, rgba(255,217,128,0.92), rgba(212,169,58,0.55) 50%, rgba(0,0,0,0) 80%); z-index: 999; opacity: 0; pointer-events: none; }
   .ascend-flash.show { animation: ascend-flash 700ms ease-out forwards; }
   @keyframes ascend-flash { 0% { opacity: 0; } 25% { opacity: 1; } 100% { opacity: 0; } }
+
+  /* Yeast Garden — 3x3 plot grid + species picker + watering. */
+  .garden-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 0.78rem; }
+  .garden-toolbar .water-btn { background: linear-gradient(180deg, #66a8d4, #3477a8); color: #fff; border: none; padding: 6px 10px; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.78rem; }
+  .garden-toolbar .water-btn:disabled { opacity: 0.5; cursor: default; }
+  .garden-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+  .plot { aspect-ratio: 1; background: rgba(0,0,0,0.45); border: 1px solid rgba(255,220,180,0.18); border-radius: 12px; box-shadow: inset 0 2px 6px rgba(0,0,0,0.5); display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; position: relative; padding: 6px; min-height: 64px; transition: background 0.15s, border-color 0.15s, transform 0.08s; }
+  .plot:active { transform: scale(0.97); }
+  .plot.empty { color: rgba(255,255,255,0.35); font-size: 0.75rem; }
+  .plot.empty:hover { background: rgba(0,0,0,0.3); border-color: rgba(255,220,180,0.4); }
+  .plot.planted { color: #f4e9d8; }
+  .plot.mature { background: rgba(80,140,80,0.35); border-color: rgba(150,220,120,0.6); animation: plot-glow 1.6s ease-in-out infinite; }
+  @keyframes plot-glow { 0%,100% { box-shadow: inset 0 2px 6px rgba(0,0,0,0.5), 0 0 0 0 rgba(150,220,120,0.4); } 50% { box-shadow: inset 0 2px 6px rgba(0,0,0,0.5), 0 0 12px 2px rgba(150,220,120,0.6); } }
+  .plot .plot-icon { font-size: 1.6rem; line-height: 1; margin-bottom: 2px; }
+  .plot .plot-time { font-size: 0.65rem; opacity: 0.72; min-height: 0.85rem; text-align: center; }
+  .plot .plot-time.ready { color: #b6e3a3; font-weight: 700; opacity: 1; }
+  .plot .plot-time.paused { color: #d4a93a; }
+  .plot-bar { position: absolute; bottom: 4px; left: 6px; right: 6px; height: 3px; background: rgba(0,0,0,0.5); border-radius: 2px; overflow: hidden; }
+  .plot-bar > i { display: block; height: 100%; background: linear-gradient(90deg, #88c97a, #ffd980); border-radius: 2px; transition: width 0.4s ease-out; }
+  .species-picker { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 6px 0 10px; }
+  .species-row { display: flex; align-items: center; gap: 8px; padding: 8px; background: rgba(255,220,180,0.06); border: 1px solid rgba(255,220,180,0.15); border-radius: 10px; cursor: pointer; transition: background 0.15s, border-color 0.15s; min-height: 56px; }
+  .species-row:hover:not(.locked) { background: rgba(255,220,180,0.14); border-color: rgba(255,220,180,0.35); }
+  .species-row.locked { opacity: 0.45; cursor: not-allowed; }
+  .species-row .species-icon { font-size: 1.4rem; }
+  .species-row .species-info { flex: 1; min-width: 0; }
+  .species-row .species-name { font-size: 0.82rem; font-weight: 700; }
+  .species-row .species-desc { font-size: 0.66rem; opacity: 0.72; line-height: 1.3; margin-top: 1px; }
+  .species-row .species-cost { font-size: 0.7rem; color: #ffd980; font-weight: 700; flex-shrink: 0; }
+  .plot-detail-actions { display: flex; gap: 8px; margin-top: 10px; }
+  .plot-detail-actions button { flex: 1; padding: 8px; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.85rem; }
+  .plot-detail-actions .harvest-btn { background: linear-gradient(180deg, #88c97a, #4f8a3e); color: #1c2e16; }
+  .plot-detail-actions .harvest-btn:disabled { opacity: 0.5; cursor: default; }
+  .plot-detail-actions .clear-btn { background: rgba(160,80,80,0.5); color: #f0c4c4; }
+  .garden-summary { font-size: 0.72rem; opacity: 0.72; margin-top: 6px; line-height: 1.4; }
 </style>
 </head>
 <body>
@@ -193,6 +227,7 @@
       <div class="menu-tabs" role="tablist">
         <button class="menu-tab" data-tab="ach" role="tab">🏆 <span class="tab-label">Achievements</span></button>
         <button class="menu-tab" data-tab="shop" role="tab">🪙 <span class="tab-label">Shop</span></button>
+        <button class="menu-tab" data-tab="garden" role="tab">🌱 <span class="tab-label">Garden</span></button>
         <button class="menu-tab" data-tab="ascend" role="tab">👑 <span class="tab-label">Ascend</span></button>
       </div>
       <div class="menu-pane" data-tab="ach">
@@ -203,6 +238,15 @@
       <div class="menu-pane" data-tab="shop" hidden>
         <div class="ach-sub" id="shop-sub"></div>
         <div id="shop-list"></div>
+      </div>
+      <div class="menu-pane" data-tab="garden" hidden>
+        <div class="ach-sub" id="garden-sub">plant species in plots. harvest for buffs and curiosities.</div>
+        <div class="garden-toolbar">
+          <span id="garden-bonus">+0% permanent rate</span>
+          <button id="water-btn" class="water-btn">💧 watering can · 1K</button>
+        </div>
+        <div class="garden-grid" id="garden-grid"></div>
+        <div class="garden-summary" id="garden-summary"></div>
       </div>
       <div class="menu-pane" data-tab="ascend" hidden>
         <div class="ach-sub">trade your kingdom for crowns. each crown grants +5% rate forever.</div>
@@ -381,6 +425,21 @@ const PHASES = [
   { id: 'cool',  icon: '❄️', name: 'Cool',  desc: 'chaos events suspended. every 60s, bank +10%.',          suspendEvents: true, bankBonusEvery: 60, bankBonusPct: 0.10 },
   { id: 'stale', icon: '🥖', name: 'Stale',  desc: 'production -25%, but treats are 50% off.',              rateMult: 0.75, treatDiscount: 0.5 },
 ];
+// Yeast Garden — 3x3 grid of plots, 6 species, harvest = various rewards.
+const GARDEN_PLOT_COUNT = 9;
+const GARDEN_GRID_SIZE = 3;
+const GARDEN_BARLEY_BONUS = 0.005;       // +0.5% per harvest
+const GARDEN_BARLEY_CAP = 0.10;          // capped at +10% global
+const GARDEN_POLLINATE_CHANCE = 0.05;    // per matching neighbor on harvest
+const GARDEN_WATER_COST = 1000;          // pumpernickels per use
+const SPECIES = [
+  { id: 'sourdough',  icon: '🌾', name: 'Active Sourdough', desc: 'fast, free. +25% rate buff (5min).',                     growMs: 5*60*1000,  cost: 0, buffMult: 1.25, buffMs: 5*60*1000 },
+  { id: 'hops',       icon: '🍃', name: 'Hops',             desc: 'wants 2 empty neighbors. +50% chaos pace (30min).',       growMs: 10*60*1000, cost: 1, needsEmptyNeighbors: 2, chaosPaceMs: 30*60*1000, chaosPaceMult: 1.5 },
+  { id: 'barley',     icon: '🌿', name: 'Malted Barley',    desc: 'slow grow, permanent +0.5% rate (cap +10%).',             growMs: 60*60*1000, cost: 2, permanentBonus: GARDEN_BARLEY_BONUS },
+  { id: 'tinyclaw',   icon: '🍄', name: 'Tinyclaw Weed',    desc: 'plant adjacent to sourdough. spawns a golden 🥯.',         growMs: 15*60*1000, cost: 1, requiresAdjacent: 'sourdough', spawnsGolden: true },
+  { id: 'stardust',   icon: '✨', name: 'Stardust Grain',   desc: 'only matures during a buff. harvest = +1 👑.',            growMs: 20*60*1000, cost: 3, requiresBuff: true, crownReward: 1 },
+  { id: 'voidmold',   icon: '🦠', name: 'Void Mold',        desc: 'destroys 4 cardinal neighbors. ×3 rate buff (3min).',     growMs: 30*60*1000, cost: 1, destroysNeighbors: true, buffMult: 3, buffMs: 3*60*1000 },
+];
 const ASCEND_THRESHOLD = 1e9;       // 1B lifetime to unlock first ascension
 const CROWN_DIVISOR = 1e9;          // crowns earned = floor(sqrt(lifetime / divisor))
 const CROWN_BONUS_PER = 0.05;       // each crown adds +5% to global rate
@@ -406,8 +465,15 @@ function defaultState() {
     activeEffects: [], criticalTaps: 0, goldensClicked: 0,
     crowns: 0, ascensions: 0, lifetimeBaked: 0, crownShop: {},
     crumbs: 0, lastCrumbAt: Date.now(),
-    phaseIndex: 0, phaseStartAt: Date.now(), saveVersion: 3,
+    phaseIndex: 0, phaseStartAt: Date.now(),
+    garden: emptyGarden(), barleyBonus: 0,
+    saveVersion: 3,
   };
+}
+function emptyGarden() {
+  const g = [];
+  for (let i = 0; i < GARDEN_PLOT_COUNT; i++) g.push({ species: null, plantedAt: 0, lastTickAt: 0 });
+  return g;
 }
 
 let state = defaultState();
@@ -447,6 +513,18 @@ function load() {
     state.phaseIndex = typeof s.phaseIndex === 'number' ? s.phaseIndex : 0;
     state.phaseStartAt = typeof s.phaseStartAt === 'number' ? s.phaseStartAt : Date.now();
     state.lastTick = typeof s.lastTick === 'number' ? s.lastTick : Date.now();
+    // Yeast Garden — array of 9 plot objects. Replace whole-cloth on length mismatch
+    // (e.g. a future save with a different grid size) so plot count stays sane.
+    if (Array.isArray(s.garden) && s.garden.length === GARDEN_PLOT_COUNT) {
+      state.garden = s.garden.map(p => ({
+        species: (p && typeof p.species === 'string') ? p.species : null,
+        plantedAt: (p && typeof p.plantedAt === 'number') ? p.plantedAt : 0,
+        lastTickAt: (p && typeof p.lastTickAt === 'number') ? p.lastTickAt : 0,
+      }));
+    } else {
+      state.garden = emptyGarden();
+    }
+    state.barleyBonus = typeof s.barleyBonus === 'number' ? s.barleyBonus : 0;
     state.saveVersion = 3;
     if (isV1) { localStorage.removeItem(SAVE_KEY_V1); save(); }
     const dt = Math.min((Date.now() - state.lastTick) / 1000, OFFLINE_CAP_SEC);
@@ -552,9 +630,20 @@ function crownBonus() {
   return (state.crowns || 0) * per;
 }
 function eventPaceFactor() {
-  return state.crownShop && state.crownShop.pacing ? EVENT_PACE_PACING : 1;
+  let f = state.crownShop && state.crownShop.pacing ? EVENT_PACE_PACING : 1;
+  // Hops boosts chaos pace (events fire faster while any hops buff is live).
+  if (hasGardenChaosBoost()) f *= (1 / SPECIES.find(s => s.id === 'hops').chaosPaceMult);
+  return f;
 }
-function globalMult() { return (1 + achievementBonus() + crownBonus()) * effectMultiplier() * phaseRateMult(); }
+function gardenBonus() {
+  return Math.min(state.barleyBonus || 0, GARDEN_BARLEY_CAP);
+}
+function hasGardenChaosBoost() {
+  // True while a 'g_hops' active effect is live (set on hops harvest).
+  const now = Date.now();
+  return (state.activeEffects || []).some(e => e.id === 'g_hops' && now < e.expiresAt);
+}
+function globalMult() { return (1 + achievementBonus() + crownBonus() + gardenBonus()) * effectMultiplier() * phaseRateMult(); }
 function rate() { return passiveRate() * globalMult(); }
 function comboTier() {
   // Walk thresholds high→low, return matching multiplier index.
@@ -1129,13 +1218,16 @@ function switchTab(tab) {
   if (tab === 'ach') renderAchPanel();
   else if (tab === 'shop') renderShop();
   else if (tab === 'ascend') openAscendPane();
+  else if (tab === 'garden') renderGarden();
 }
 function refreshMenu() {
   // Tab availability gates content rather than hiding tabs.
   const shopTab = document.querySelector('.menu-tab[data-tab="shop"]');
   const ascendTab = document.querySelector('.menu-tab[data-tab="ascend"]');
+  const gardenTab = document.querySelector('.menu-tab[data-tab="garden"]');
   shopTab.disabled = (state.ascensions || 0) < 1 && (state.crowns || 0) === 0;
   ascendTab.disabled = state.lifetime < ASCEND_THRESHOLD && (state.crowns || 0) === 0;
+  if (gardenTab) gardenTab.disabled = (state.crumbs || 0) === 0 && state.garden && state.garden.every(p => !p.species);
   // If active tab is now disabled, fall back to ach.
   const activeBtn = document.querySelector(`.menu-tab[data-tab="${activeTab}"]`);
   if (activeBtn && activeBtn.disabled) { activeTab = 'ach'; }
@@ -1198,6 +1290,8 @@ document.getElementById('ascend-confirm').addEventListener('click', () => {
     lastCrumbAt: state.lastCrumbAt || Date.now(),
     phaseIndex: state.phaseIndex || 0,
     phaseStartAt: state.phaseStartAt || Date.now(),
+    garden: state.garden || emptyGarden(),
+    barleyBonus: state.barleyBonus || 0,
   };
   state = Object.assign(defaultState(), carry);
   if (shop.reinforced) state.owned.apprentice = (state.owned.apprentice || 0) + 1;
@@ -1259,6 +1353,227 @@ function buyShopItem(id) {
   renderShop(); refreshShop(); refreshAscend(); renderCount();
 }
 
+// Yeast Garden — 3×3 mini-game.
+const gardenGridEl = document.getElementById('garden-grid');
+const gardenBonusEl = document.getElementById('garden-bonus');
+const gardenSummaryEl = document.getElementById('garden-summary');
+const waterBtnEl = document.getElementById('water-btn');
+function plotGrowProgress(plot) {
+  const sp = SPECIES.find(s => s.id === plot.species);
+  if (!sp) return 1;
+  // Stardust pauses while no buff is active. Use lastTickAt accumulator.
+  const accumulated = plot.lastTickAt - plot.plantedAt;
+  return Math.max(0, Math.min(1, accumulated / sp.growMs));
+}
+function plotIsMature(plot) { return plot.species && plotGrowProgress(plot) >= 1; }
+function emptyNeighbors(idx) {
+  const x = idx % GARDEN_GRID_SIZE, y = Math.floor(idx / GARDEN_GRID_SIZE);
+  const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+  let count = 0;
+  for (const [dx, dy] of dirs) {
+    const nx = x + dx, ny = y + dy;
+    if (nx < 0 || ny < 0 || nx >= GARDEN_GRID_SIZE || ny >= GARDEN_GRID_SIZE) continue;
+    if (!state.garden[ny * GARDEN_GRID_SIZE + nx].species) count++;
+  }
+  return count;
+}
+function neighborsOfSpecies(idx, species) {
+  const x = idx % GARDEN_GRID_SIZE, y = Math.floor(idx / GARDEN_GRID_SIZE);
+  const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+  let n = 0;
+  for (const [dx, dy] of dirs) {
+    const nx = x + dx, ny = y + dy;
+    if (nx < 0 || ny < 0 || nx >= GARDEN_GRID_SIZE || ny >= GARDEN_GRID_SIZE) continue;
+    if (state.garden[ny * GARDEN_GRID_SIZE + nx].species === species) n++;
+  }
+  return n;
+}
+function canPlant(species, idx) {
+  if ((state.crumbs || 0) < species.cost) return { ok: false, reason: `costs ${species.cost} crumb${species.cost === 1 ? '' : 's'}` };
+  if (species.needsEmptyNeighbors && emptyNeighbors(idx) < species.needsEmptyNeighbors) {
+    return { ok: false, reason: `needs ${species.needsEmptyNeighbors} empty neighbors` };
+  }
+  if (species.requiresAdjacent && neighborsOfSpecies(idx, species.requiresAdjacent) < 1) {
+    return { ok: false, reason: `must be adjacent to ${species.requiresAdjacent}` };
+  }
+  return { ok: true };
+}
+function plantInPlot(idx, speciesId) {
+  const species = SPECIES.find(s => s.id === speciesId);
+  if (!species) return;
+  const plot = state.garden[idx];
+  if (plot.species) return;
+  const check = canPlant(species, idx);
+  if (!check.ok) { toast(`can't plant: ${check.reason}`); return; }
+  state.crumbs -= species.cost;
+  plot.species = species.id;
+  plot.plantedAt = Date.now();
+  plot.lastTickAt = Date.now();
+  // Void mold destroys cardinal neighbors on plant.
+  if (species.destroysNeighbors) {
+    const x = idx % GARDEN_GRID_SIZE, y = Math.floor(idx / GARDEN_GRID_SIZE);
+    let refunds = 0;
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= GARDEN_GRID_SIZE || ny >= GARDEN_GRID_SIZE) continue;
+      const n = state.garden[ny * GARDEN_GRID_SIZE + nx];
+      if (n.species) {
+        const ns = SPECIES.find(s => s.id === n.species);
+        if (ns) refunds += Math.floor(ns.cost * 0.5);
+        n.species = null; n.plantedAt = 0; n.lastTickAt = 0;
+      }
+    }
+    if (refunds > 0) { state.crumbs += refunds; toast(`mold destroyed neighbors. +${refunds} crumbs.`); }
+  }
+  save(); renderGarden(); refreshMenu();
+}
+function harvestPlot(idx) {
+  const plot = state.garden[idx];
+  if (!plotIsMature(plot)) return;
+  const species = SPECIES.find(s => s.id === plot.species);
+  if (!species) return;
+  // Apply harvest reward.
+  if (species.buffMult && species.buffMs) {
+    state.activeEffects.push({ id: 'g_' + species.id, expiresAt: Date.now() + species.buffMs, mult: species.buffMult });
+  }
+  if (species.chaosPaceMs) {
+    state.activeEffects.push({ id: 'g_hops', expiresAt: Date.now() + species.chaosPaceMs, mult: 1 });
+  }
+  if (species.permanentBonus) {
+    state.barleyBonus = Math.min(GARDEN_BARLEY_CAP, (state.barleyBonus || 0) + species.permanentBonus);
+  }
+  if (species.spawnsGolden) {
+    spawnGolden();
+  }
+  if (species.crownReward) {
+    state.crowns = (state.crowns || 0) + species.crownReward;
+    state.lifetimeBaked = state.lifetimeBaked || 0;
+  }
+  toast(`🌱 harvested ${species.name}`);
+  // Cross-pollination: 5% chance per matching neighbor to seed an empty plot
+  // with a random non-mold species.
+  const matches = neighborsOfSpecies(idx, species.id);
+  if (matches > 0 && Math.random() < GARDEN_POLLINATE_CHANCE * matches) {
+    const empty = [];
+    for (let i = 0; i < GARDEN_PLOT_COUNT; i++) {
+      if (!state.garden[i].species) empty.push(i);
+    }
+    if (empty.length) {
+      const target = empty[Math.floor(Math.random() * empty.length)];
+      const candidates = SPECIES.filter(s => s.id !== 'voidmold');
+      const hybrid = candidates[Math.floor(Math.random() * candidates.length)];
+      state.garden[target].species = hybrid.id;
+      state.garden[target].plantedAt = Date.now();
+      state.garden[target].lastTickAt = Date.now();
+      toast(`🌱 a wild ${hybrid.name} sprouted next door.`);
+    }
+  }
+  // Clear plot.
+  plot.species = null; plot.plantedAt = 0; plot.lastTickAt = 0;
+  save(); renderCount(); renderGarden(); refreshMenu(); renderEffects();
+}
+function clearPlot(idx) {
+  const plot = state.garden[idx];
+  if (!plot.species) return;
+  if (!confirm('Uproot this plot? You will not be refunded.')) return;
+  plot.species = null; plot.plantedAt = 0; plot.lastTickAt = 0;
+  save(); renderGarden();
+}
+function waterRandomPlot() {
+  if ((state.count || 0) < GARDEN_WATER_COST) { toast(`watering can needs ${GARDEN_WATER_COST} pumpernickels`); return; }
+  // Pick the plot closest to ready (most progressed but not yet mature).
+  let target = -1, best = -1;
+  for (let i = 0; i < GARDEN_PLOT_COUNT; i++) {
+    const p = state.garden[i];
+    if (!p.species || plotIsMature(p)) continue;
+    const prog = plotGrowProgress(p);
+    if (prog > best) { best = prog; target = i; }
+  }
+  if (target < 0) { toast('nothing growing yet.'); return; }
+  state.count -= GARDEN_WATER_COST;
+  const plot = state.garden[target];
+  const species = SPECIES.find(s => s.id === plot.species);
+  // Halve remaining grow time by advancing lastTickAt.
+  const remaining = species.growMs - (plot.lastTickAt - plot.plantedAt);
+  plot.lastTickAt += remaining / 2;
+  toast(`💧 watered the ${species.name}`);
+  save(); renderCount(); renderGarden();
+}
+function openSpeciesPicker(idx) {
+  const ovEl = document.createElement('div');
+  ovEl.className = 'ach-modal show';
+  ovEl.style.zIndex = '500';
+  const card = document.createElement('div');
+  card.className = 'ach-card';
+  card.innerHTML = `
+    <button class="ach-close" aria-label="Close">×</button>
+    <div class="ach-title">🌱 plant in plot ${idx + 1}</div>
+    <div class="ach-sub">crumbs: ${state.crumbs || 0}</div>
+    <div class="species-picker"></div>
+  `;
+  ovEl.appendChild(card);
+  document.body.appendChild(ovEl);
+  const grid = card.querySelector('.species-picker');
+  for (const sp of SPECIES) {
+    const check = canPlant(sp, idx);
+    const row = document.createElement('div');
+    row.className = 'species-row' + (check.ok ? '' : ' locked');
+    row.innerHTML = `
+      <div class="species-icon">${sp.icon}</div>
+      <div class="species-info">
+        <div class="species-name">${sp.name}</div>
+        <div class="species-desc">${sp.desc}${check.ok ? '' : ' — ' + check.reason}</div>
+      </div>
+      <div class="species-cost">${sp.cost === 0 ? 'free' : sp.cost + '🍞'}</div>
+    `;
+    if (check.ok) row.addEventListener('click', () => { plantInPlot(idx, sp.id); document.body.removeChild(ovEl); });
+    grid.appendChild(row);
+  }
+  const close = () => { if (ovEl.parentNode) document.body.removeChild(ovEl); };
+  card.querySelector('.ach-close').addEventListener('click', close);
+  ovEl.addEventListener('click', (e) => { if (e.target === ovEl) close(); });
+}
+function renderGarden() {
+  if (!gardenGridEl) return;
+  gardenGridEl.innerHTML = '';
+  for (let i = 0; i < GARDEN_PLOT_COUNT; i++) {
+    const plot = state.garden[i];
+    const cell = document.createElement('div');
+    cell.className = 'plot';
+    if (!plot.species) {
+      cell.classList.add('empty');
+      cell.innerHTML = `<div class="plot-icon">＋</div><div class="plot-time">empty</div>`;
+      cell.addEventListener('click', () => openSpeciesPicker(i));
+    } else {
+      const sp = SPECIES.find(s => s.id === plot.species);
+      const mature = plotIsMature(plot);
+      const progress = plotGrowProgress(plot);
+      cell.classList.add(mature ? 'mature' : 'planted');
+      const remaining = mature ? 0 : Math.max(0, sp.growMs - (plot.lastTickAt - plot.plantedAt));
+      const minutes = Math.floor(remaining / 60000), seconds = Math.floor((remaining % 60000) / 1000);
+      const paused = sp.requiresBuff && !state.activeEffects.some(e => Date.now() < e.expiresAt && e.mult > 1);
+      const timeText = mature ? 'harvest!' : (paused ? 'paused (no buff)' : `${minutes}:${seconds.toString().padStart(2, '0')}`);
+      cell.innerHTML = `
+        <div class="plot-icon">${sp.icon}</div>
+        <div class="plot-time ${mature ? 'ready' : (paused ? 'paused' : '')}">${timeText}</div>
+        <div class="plot-bar"><i style="width:${(progress * 100).toFixed(1)}%"></i></div>
+      `;
+      if (mature) {
+        cell.addEventListener('click', () => harvestPlot(i));
+      } else {
+        cell.addEventListener('click', () => {
+          if (confirm(`Uproot the ${sp.name}? Crumbs not refunded.`)) clearPlot(i);
+        });
+      }
+    }
+    gardenGridEl.appendChild(cell);
+  }
+  if (gardenBonusEl) gardenBonusEl.textContent = `+${(gardenBonus() * 100).toFixed(1)}% permanent rate`;
+  if (waterBtnEl) waterBtnEl.disabled = (state.count || 0) < GARDEN_WATER_COST;
+  if (gardenSummaryEl) gardenSummaryEl.textContent = `crumbs: ${state.crumbs || 0} · barley harvests cap at +${(GARDEN_BARLEY_CAP * 100).toFixed(0)}% (currently +${(gardenBonus() * 100).toFixed(1)}%)`;
+}
+if (waterBtnEl) waterBtnEl.addEventListener('click', waterRandomPlot);
+
 const helpModalEl = document.getElementById('help-modal');
 document.getElementById('help-btn').addEventListener('click', () => helpModalEl.classList.add('show'));
 document.getElementById('help-close').addEventListener('click', () => helpModalEl.classList.remove('show'));
@@ -1296,6 +1611,16 @@ setInterval(() => {
     state.crumbs = (state.crumbs || 0) + 1;
     state.lastCrumbAt += CRUMB_RIPEN_MS;
     toast(`🍞 a ripe crumb appeared. you have ${state.crumbs}.`);
+  }
+  // Yeast Garden — advance grow timers. Stardust requires an active buff.
+  for (let i = 0; i < (state.garden ? state.garden.length : 0); i++) {
+    const plot = state.garden[i];
+    if (!plot.species) continue;
+    const sp = SPECIES.find(s => s.id === plot.species);
+    if (!sp) continue;
+    const buffActive = state.activeEffects.some(e => Date.now() < e.expiresAt && e.mult > 1);
+    if (sp.requiresBuff && !buffActive) continue;
+    plot.lastTickAt = Math.min(plot.plantedAt + sp.growMs, plot.lastTickAt + TICK_MS);
   }
   // Sourdough Phases — global rule cycler. Advances on real elapsed time.
   while (now - state.phaseStartAt >= PHASE_DURATION_MS) {
