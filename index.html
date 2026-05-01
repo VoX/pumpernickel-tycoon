@@ -90,6 +90,13 @@
   .golden { position: fixed; font-size: 2.8rem; z-index: 80; cursor: pointer; filter: drop-shadow(0 0 18px rgba(255,210,80,0.95)) drop-shadow(0 0 6px rgba(255,180,40,0.8)); display: none; pointer-events: auto; user-select: none; }
   .golden.active { display: block; animation: golden-wiggle 1.4s ease-in-out infinite; }
   @keyframes golden-wiggle { 0%,100% { transform: rotate(-10deg) scale(1); } 50% { transform: rotate(10deg) scale(1.12); } }
+
+  /* Ascend button pulse + ascend flash overlay. */
+  #ascend-btn.pulse { animation: ascend-pulse 1.6s ease-in-out infinite; }
+  @keyframes ascend-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255,210,80,0.7); } 50% { box-shadow: 0 0 14px 6px rgba(255,210,80,0.55); } }
+  .ascend-flash { position: fixed; inset: 0; background: radial-gradient(circle at center, rgba(255,240,180,0.95), rgba(255,200,80,0.6) 50%, rgba(0,0,0,0) 80%); z-index: 999; opacity: 0; pointer-events: none; }
+  .ascend-flash.show { animation: ascend-flash 700ms ease-out forwards; }
+  @keyframes ascend-flash { 0% { opacity: 0; } 25% { opacity: 1; } 100% { opacity: 0; } }
 </style>
 </head>
 <body>
@@ -116,6 +123,7 @@
   <div class="toast" id="toast"></div>
   <div class="event-banner" id="event-banner"></div>
   <div class="golden" id="golden" role="button" aria-label="Golden Pumpernickel">🥯</div>
+  <div class="ascend-flash" id="ascend-flash"></div>
   <div class="ach-modal" id="ach-modal" role="dialog" aria-label="Achievements">
     <div class="ach-card">
       <button class="ach-close" id="ach-close" aria-label="Close">×</button>
@@ -685,9 +693,9 @@ function crownsForLifetime(lifetime) {
 function refreshAscend() {
   const earnable = crownsForLifetime(state.lifetime);
   const gain = earnable - (state.crowns || 0);
-  // Show the button once first ascension is reachable, OR if any crowns owned.
   const visible = state.lifetime >= ASCEND_THRESHOLD || (state.crowns || 0) > 0;
   ascendBtnEl.hidden = !visible;
+  ascendBtnEl.classList.toggle('pulse', gain > 0);
   ascendInfoEl.textContent = (state.crowns || 0) > 0
     ? `${state.crowns}👑 +${Math.round(crownBonus()*100)}%`
     : `Ascend (+${gain}👑)`;
@@ -730,6 +738,8 @@ document.getElementById('ascend-confirm').addEventListener('click', () => {
   lastRenderedCount = -1; lastRenderedRate = -1; lastStreakTier = -1;
   setPumpEmoji();
   ascendModalEl.classList.remove('show');
+  const flash = document.getElementById('ascend-flash');
+  flash.classList.remove('show'); void flash.offsetWidth; flash.classList.add('show');
   toast(`✨ ascended. +${gain}👑 — total ${state.crowns}`);
   save(); renderCount(); refreshTreats(); refreshBakery(); renderAchPanel(); refreshAscend();
 });
