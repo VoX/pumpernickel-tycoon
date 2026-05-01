@@ -367,6 +367,7 @@ const GOLDEN_BUFFS = [
   { id: 'g_overdrive', copy: 'overdrive. x10 rate',       mult: 10 },
   { id: 'g_fizzle',    copy: 'fizzle. x1.5 (it tried.)',  mult: 1.5 },
 ];
+const CRUMB_RIPEN_MS = 60 * 60 * 1000;  // ripe crumb every 1 hour real-time
 const ASCEND_THRESHOLD = 1e9;       // 1B lifetime to unlock first ascension
 const CROWN_DIVISOR = 1e9;          // crowns earned = floor(sqrt(lifetime / divisor))
 const CROWN_BONUS_PER = 0.05;       // each crown adds +5% to global rate
@@ -390,7 +391,8 @@ function defaultState() {
     achievements: {}, totalTaps: 0, longestStreak: 0,
     buffsConsecutive: 0, startedAt: Date.now(), hasEgg: false,
     activeEffects: [], criticalTaps: 0, goldensClicked: 0,
-    crowns: 0, ascensions: 0, lifetimeBaked: 0, crownShop: {}, saveVersion: 3,
+    crowns: 0, ascensions: 0, lifetimeBaked: 0, crownShop: {},
+    crumbs: 0, lastCrumbAt: Date.now(), saveVersion: 3,
   };
 }
 
@@ -426,6 +428,8 @@ function load() {
     state.ascensions = typeof s.ascensions === 'number' ? s.ascensions : 0;
     state.lifetimeBaked = typeof s.lifetimeBaked === 'number' ? s.lifetimeBaked : 0;
     state.crownShop = (s.crownShop && typeof s.crownShop === 'object') ? s.crownShop : {};
+    state.crumbs = typeof s.crumbs === 'number' ? s.crumbs : 0;
+    state.lastCrumbAt = typeof s.lastCrumbAt === 'number' ? s.lastCrumbAt : Date.now();
     state.lastTick = typeof s.lastTick === 'number' ? s.lastTick : Date.now();
     state.saveVersion = 3;
     if (isV1) { localStorage.removeItem(SAVE_KEY_V1); save(); }
@@ -774,6 +778,7 @@ function renderStats() {
     ['critical hits', `${fmt(crits)} (${critPct}%)`],
     ['goldens tapped', fmt(state.goldensClicked || 0)],
     ['ascensions', String(state.ascensions || 0)],
+    ['ripe crumbs 🍞', String(state.crumbs || 0)],
     ['longest streak', String(state.longestStreak || 0)],
     ['lifetime baked', fmt(totalLifetime)],
   ];
@@ -1242,6 +1247,12 @@ setInterval(() => {
   if (state.crownShop && state.crownShop.steward && tickCount % AUTO_BUY_INTERVAL_TICKS === 0) {
     const t = bestRateBuy();
     if (t && state.count >= priceOf(t)) buy(t);
+  }
+  // Crumb Trail — a ripe crumb appears every CRUMB_RIPEN_MS (catches up if offline).
+  while (now - state.lastCrumbAt >= CRUMB_RIPEN_MS) {
+    state.crumbs = (state.crumbs || 0) + 1;
+    state.lastCrumbAt += CRUMB_RIPEN_MS;
+    toast(`🍞 a ripe crumb appeared. you have ${state.crumbs}.`);
   }
   renderCount();
   renderEffects();
