@@ -1,0 +1,209 @@
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
+  html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; background: linear-gradient(180deg, #2d1810 0%, #5c3a26 100%); color: #f4e9d8; touch-action: manipulation; }
+  body { display: flex; flex-direction: column; height: 100dvh; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+  header { padding: 60px 60px 12px; text-align: center; position: relative; }
+  .count-row { display: flex; align-items: center; justify-content: center; gap: 10px; }
+  .count { font-size: 2.4rem; font-weight: 800; letter-spacing: -0.02em; transition: transform 0.12s; }
+  .count.bump { transform: scale(1.18); }
+  .companion { font-size: 1.6rem; opacity: 0; transition: opacity 0.3s; }
+  .companion.show { opacity: 1; }
+  .label { font-size: 0.78rem; opacity: 0.65; text-transform: uppercase; letter-spacing: 0.12em; }
+  .rate { font-size: 0.8rem; opacity: 0.7; margin-top: 4px; min-height: 1.2em; }
+  .streak { font-size: 0.85rem; opacity: 0; margin-top: 6px; transition: opacity 0.2s; min-height: 1.1em; color: #ffd980; }
+  .streak.show { opacity: 0.95; }
+  .effects { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 6px; min-height: 22px; }
+  .effects:empty { min-height: 0; }
+  .effect-pill { font-size: 0.7rem; padding: 3px 8px; border-radius: 999px; border: 1px solid rgba(255,220,180,0.3); background: rgba(0,0,0,0.4); }
+  .effect-pill.buff { border-color: rgba(120,200,120,0.6); color: #cfe9c9; }
+  .effect-pill.debuff { border-color: rgba(220,120,120,0.6); color: #f0c4c4; }
+  .phase { font-size: 0.75rem; opacity: 0.85; margin-top: 6px; min-height: 1.2em; cursor: help; }
+  .phase .phase-icon { font-size: 0.95rem; margin-right: 4px; }
+  .phase .phase-name { color: #ffd980; font-weight: 700; }
+  .phase .phase-time { opacity: 0.6; font-size: 0.7rem; margin-left: 6px; }
+  main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; gap: 18px; padding: 0 12px; }
+  /* Outer .pump handles JS-driven depth transform; .pump-inner runs CSS animations. */
+  .pump { font-size: min(36vw, 180px); cursor: pointer; position: relative; display: flex; align-items: center; justify-content: center; line-height: 1; padding: 16px; user-select: none; will-change: transform; transition: transform 0.18s ease-out, filter 0.25s, text-shadow 0.25s; }
+  .pump-inner { display: inline-flex; align-items: center; justify-content: center; line-height: 1; will-change: transform; animation: breathe 4.5s ease-in-out infinite; }
+  .pump.combo-1 { filter: drop-shadow(0 0 18px rgba(255,180,80,0.55)); }
+  .pump.combo-2 .pump-inner { animation: pulse 0.9s ease-in-out infinite; }
+  .pump.combo-2 { filter: drop-shadow(0 0 28px rgba(255,140,40,0.85)); }
+  .pump.combo-3 .pump-inner { animation: pulse 0.6s ease-in-out infinite; }
+  .pump.combo-3 { filter: drop-shadow(0 0 44px rgba(255,80,20,1)); }
+  @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+  @keyframes breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.02); } }
+  /* Per-tap squish + rebound. Applied via inline animation to override pulse/breathe. */
+  @keyframes tap-bounce { 0% { transform: scale(1); } 30% { transform: scale(0.92); } 65% { transform: scale(1.05); } 100% { transform: scale(1); } }
+  /* Tier-up burst — fires when crossing a combo threshold. */
+  .pump-aura { position: absolute; inset: 0; border-radius: 50%; pointer-events: none; opacity: 0; }
+  .pump-aura.fire { animation: aura-burst 700ms ease-out forwards; }
+  @keyframes aura-burst { 0% { transform: scale(0.4); opacity: 0.9; box-shadow: 0 0 0 8px rgba(255,210,80,0.7); } 100% { transform: scale(2.2); opacity: 0; box-shadow: 0 0 0 8px rgba(255,210,80,0); } }
+  /* Treat row purchase flash. */
+  .treat.buy-flash { animation: treat-flash 380ms ease-out; }
+  @keyframes treat-flash { 0% { background: rgba(255,220,100,0.8); border-color: rgba(255,220,100,1); transform: scale(1.02); } 100% { background: rgba(255,220,180,0.14); border-color: rgba(255,220,180,0.35); transform: scale(1); } }
+  /* Bakery asset pop-in when newly owned. */
+  .asset.popin { animation: asset-popin 360ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+  @keyframes asset-popin { 0% { transform: scale(0); opacity: 0; } 60% { transform: scale(1.3); opacity: 1; } 100% { transform: scale(1); } }
+  .float { position: absolute; pointer-events: none; font-weight: 700; font-size: 1.4rem; color: #ffd980; text-shadow: 0 2px 6px rgba(0,0,0,0.6); animation: rise 0.9s ease-out forwards; z-index: 5; }
+  .float.crit { font-size: 2.4rem; color: #ffe066; text-shadow: 0 0 18px rgba(255,210,80,0.9), 0 2px 6px rgba(0,0,0,0.6); }
+  .crumb { position: absolute; pointer-events: none; font-size: 0.7rem; opacity: 0.85; will-change: transform, opacity; }
+  .crumb.crit { font-size: 1.1rem; color: #ffe066; }
+  @keyframes crumb-fly {
+    from { transform: translate(-50%, -50%) rotate(0deg); opacity: 0.95; }
+    to   { transform: translate(var(--cx), var(--cy)) rotate(var(--cr)); opacity: 0; }
+  }
+  @keyframes rise { from { opacity: 1; transform: translate(-50%, 0) scale(1); } to { opacity: 0; transform: translate(-50%, -120px) scale(1.4); } }
+  .shop { background: rgba(0,0,0,0.35); border-top: 1px solid rgba(255,220,180,0.15); padding: 12px; max-height: 50vh; overflow-y: auto; }
+  .shop-title { font-size: 0.78rem; opacity: 0.65; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 10px; padding: 0 4px; }
+  .treat { display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: rgba(255,220,180,0.06); border: 1px solid rgba(255,220,180,0.12); border-radius: 12px; margin-bottom: 8px; transition: background 0.15s, transform 0.08s; }
+  .treat:active { transform: scale(0.98); }
+  .treat.affordable { background: rgba(255,220,180,0.14); border-color: rgba(255,220,180,0.35); }
+  .treat.locked { opacity: 0.5; pointer-events: none; }
+  .treat.maxed { display: none; }
+  .icon { font-size: 1.8rem; width: 44px; text-align: center; flex-shrink: 0; }
+  .info { flex: 1; min-width: 0; }
+  .name { font-weight: 700; font-size: 0.95rem; }
+  .desc { font-size: 0.75rem; opacity: 0.7; margin-top: 2px; }
+  .meta { text-align: right; flex-shrink: 0; }
+  .price { font-weight: 700; font-size: 0.95rem; color: #ffd980; }
+  .owned { font-size: 0.7rem; opacity: 0.65; margin-top: 2px; min-height: 0.9rem; }
+  .toast { position: fixed; bottom: calc(50vh + 8px); left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.9); padding: 10px 16px; border-radius: 10px; font-size: 0.85rem; opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 100; max-width: 90vw; text-align: center; }
+  .toast.show { opacity: 1; }
+  /* Topbtn = corner-anchored fixed buttons. Header has padding to clear them. */
+  .topbtn { position: fixed; top: calc(env(safe-area-inset-top) + 8px); background: rgba(0,0,0,0.4); color: rgba(255,255,255,0.85); border: none; padding: 12px 14px; border-radius: 10px; font-size: 0.78rem; cursor: pointer; z-index: 50; min-height: 44px; min-width: 44px; }
+  .topbtn:hover { color: #fff; background: rgba(0,0,0,0.6); }
+  #menu-btn { left: 8px; }
+  #help-btn { right: 60px; font-size: 1rem; font-weight: 800; }
+  #mute-btn { right: 8px; font-size: 1rem; }
+  /* Reset hides bottom-right to avoid misclicks. */
+  #reset { right: 8px; bottom: calc(env(safe-area-inset-bottom) + 4px); top: auto; padding: 8px 10px; font-size: 0.62rem; color: rgba(255,255,255,0.32); background: transparent; min-height: 0; min-width: 0; }
+  #reset:hover { color: rgba(255,255,255,0.6); background: rgba(0,0,0,0.3); }
+  /* Shop + ascend are inline in the header, beneath effects, never overlaying the count. */
+  .event-banner { position: fixed; top: calc(env(safe-area-inset-top) + 12px); left: 50%; transform: translateX(-50%) translateY(-20px); padding: 10px 16px; background: rgba(40,20,10,0.94); border: 1px solid rgba(255,220,180,0.35); border-radius: 10px; max-width: 90vw; font-size: 0.85rem; z-index: 200; opacity: 0; transition: opacity 0.3s, transform 0.3s; pointer-events: none; }
+  .event-banner.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .event-banner.kind-buff { border-color: rgba(120,200,120,0.6); }
+  .event-banner.kind-debuff { border-color: rgba(220,120,120,0.6); }
+  .event-banner.kind-instant, .event-banner.kind-instant_pct { border-color: rgba(255,200,100,0.6); }
+  .ach-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 300; display: none; align-items: center; justify-content: center; padding: 20px; }
+  .ach-modal.show { display: flex; }
+  .ach-card { background: linear-gradient(180deg, #3a2618 0%, #2d1810 100%); border: 1px solid rgba(255,220,180,0.25); border-radius: 14px; padding: 18px; max-width: 520px; max-height: 85vh; width: 100%; overflow-y: auto; position: relative; }
+  .ach-close { position: absolute; top: 4px; right: 6px; background: none; border: none; color: rgba(255,255,255,0.7); font-size: 1.6rem; cursor: pointer; padding: 8px 12px; min-width: 44px; min-height: 44px; line-height: 1; }
+  .ach-close:hover { color: #fff; }
+  .ach-title { font-size: 1.05rem; font-weight: 800; margin-bottom: 4px; }
+  .ach-sub { font-size: 0.78rem; opacity: 0.65; margin-bottom: 14px; }
+  .ach-row { display: flex; gap: 10px; padding: 8px 4px; border-bottom: 1px solid rgba(255,220,180,0.08); }
+  .ach-row:last-child { border-bottom: none; }
+  .ach-row .icon { font-size: 1.4rem; width: 32px; }
+  .ach-row.locked { opacity: 0.45; }
+  /* Lifetime stats grid above the achievement list. */
+  .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 14px; margin: 8px 0 14px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 10px; font-size: 0.78rem; }
+  .stats .stat { display: flex; justify-content: space-between; gap: 8px; }
+  .stats .stat-k { opacity: 0.65; }
+  .stats .stat-v { color: #ffd980; font-weight: 700; }
+  /* Menu tabs (achievements / shop / ascend live in one modal). */
+  .menu-tabs { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 1px solid rgba(255,220,180,0.15); }
+  .menu-tab { flex: 1; background: transparent; border: none; color: rgba(255,255,255,0.6); padding: 10px 6px; font-size: 0.85rem; font-weight: 700; cursor: pointer; border-bottom: 2px solid transparent; transition: color 0.15s, border-color 0.15s; }
+  .menu-tab:hover:not(:disabled) { color: rgba(255,255,255,0.9); }
+  .menu-tab.active { color: #ffd980; border-bottom-color: #ffd980; }
+  .menu-tab:disabled { opacity: 0.35; cursor: not-allowed; }
+  .menu-tab .tab-label { font-size: 0.8em; }
+  .menu-pane[hidden] { display: none; }
+  .ach-row .name { font-size: 0.88rem; font-weight: 700; }
+  .ach-row .desc { font-size: 0.72rem; opacity: 0.7; margin-top: 1px; }
+  .shop-buy { border: none; border-radius: 10px; padding: 6px 10px; font-weight: 800; min-width: 64px; cursor: pointer; color: #2d1810; background: linear-gradient(180deg, #d4a93a, #a87a18); transition: background 0.2s, transform 0.1s; }
+  .shop-buy:active { transform: scale(0.96); }
+  .shop-buy.owned { background: #6b4a22; color: #ffd980; cursor: default; }
+  .shop-buy:disabled:not(.owned) { background: rgba(80,60,40,0.5); color: #2d1810; cursor: default; }
+  .gold-btn { width: 100%; padding: 12px; background: linear-gradient(180deg, #d4a93a, #a87a18); color: #2d1810; border: none; border-radius: 10px; font-weight: 800; font-size: 0.95rem; cursor: pointer; transition: background 0.2s; }
+  .gold-btn:hover:not(:disabled) { background: linear-gradient(180deg, #ffd060, #c98a18); }
+  .gold-btn:disabled { opacity: 0.5; cursor: default; }
+
+  /* Bakery — visual representation of owned production assets. */
+  .bakery { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; max-width: 92vw; min-height: 46px; padding: 4px; }
+  .bakery:empty { display: none; }
+  .asset { display: inline-flex; align-items: center; gap: 4px; background: rgba(255,220,180,0.08); border: 1px solid rgba(255,220,180,0.18); padding: 4px 8px; border-radius: 999px; font-size: 0.85rem; transition: transform 0.18s, background 0.2s; cursor: pointer; }
+  .asset .asset-icon { font-size: 1.05rem; line-height: 1; }
+  .asset .asset-count { font-weight: 700; color: #ffd980; font-size: 0.78rem; }
+  .asset.bumped { transform: scale(1.18); background: rgba(255,220,180,0.22); }
+  @keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+  .asset.live .asset-icon { animation: bob var(--bob, 1.6s) ease-in-out infinite; }
+  .asset .burnt-crust { position: absolute; top: -6px; right: -6px; font-size: 0.95rem; cursor: pointer; animation: crust-pulse 1.4s ease-in-out infinite; filter: drop-shadow(0 0 6px rgba(180,40,40,0.85)); }
+  @keyframes crust-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.18); } }
+  .asset { position: relative; }
+
+  /* Golden Pumpernickel — random clickable bonus. */
+  .golden { position: fixed; font-size: 2.8rem; z-index: 80; cursor: pointer; filter: drop-shadow(0 0 18px rgba(255,210,80,0.95)) drop-shadow(0 0 6px rgba(255,180,40,0.8)); pointer-events: none; user-select: none; opacity: 0; transition: opacity 0.25s; left: -200px; top: -200px; }
+  .golden.active { opacity: 1; pointer-events: auto; animation: golden-wiggle 1.4s cubic-bezier(0.5,1.4,0.4,1) infinite; }
+  @keyframes golden-wiggle { 0%,100% { transform: rotate(-10deg) scale(1); } 50% { transform: rotate(10deg) scale(1.12); } }
+
+  /* Menu button — pop on achievement unlock; pulse when ascension is earnable. */
+  #menu-btn.popped { animation: ach-pop 700ms cubic-bezier(0.4,1.6,0.4,1); }
+  @keyframes ach-pop { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255,210,80,0); } 30% { transform: scale(1.25); box-shadow: 0 0 18px 6px rgba(255,210,80,0.7); } 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255,210,80,0); } }
+  #menu-btn.pulse { animation: ascend-pulse 1.6s ease-in-out infinite; }
+  @keyframes ascend-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255,210,80,0.7); } 50% { box-shadow: 0 0 14px 6px rgba(255,210,80,0.55); } }
+  .ascend-flash { position: fixed; inset: 0; background: radial-gradient(circle at center, rgba(255,217,128,0.92), rgba(212,169,58,0.55) 50%, rgba(0,0,0,0) 80%); z-index: 999; opacity: 0; pointer-events: none; }
+  .ascend-flash.show { animation: ascend-flash 700ms ease-out forwards; }
+  @keyframes ascend-flash { 0% { opacity: 0; } 25% { opacity: 1; } 100% { opacity: 0; } }
+
+  /* Yeast Garden — 3x3 plot grid + species picker + watering. */
+  .garden-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 0.78rem; }
+  .garden-toolbar .water-btn { background: linear-gradient(180deg, #66a8d4, #3477a8); color: #fff; border: none; padding: 6px 10px; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.78rem; }
+  .garden-toolbar .water-btn:disabled { opacity: 0.5; cursor: default; }
+  .garden-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+  .plot { aspect-ratio: 1; background: rgba(0,0,0,0.45); border: 1px solid rgba(255,220,180,0.18); border-radius: 12px; box-shadow: inset 0 2px 6px rgba(0,0,0,0.5); display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; position: relative; padding: 6px; min-height: 64px; transition: background 0.15s, border-color 0.15s, transform 0.08s; }
+  .plot:active { transform: scale(0.97); }
+  .plot.empty { color: rgba(255,255,255,0.35); font-size: 0.75rem; }
+  .plot.empty:hover { background: rgba(0,0,0,0.3); border-color: rgba(255,220,180,0.4); }
+  .plot.planted { color: #f4e9d8; }
+  .plot.mature { background: rgba(80,140,80,0.35); border-color: rgba(150,220,120,0.6); animation: plot-glow 1.6s ease-in-out infinite; }
+  @keyframes plot-glow { 0%,100% { box-shadow: inset 0 2px 6px rgba(0,0,0,0.5), 0 0 0 0 rgba(150,220,120,0.4); } 50% { box-shadow: inset 0 2px 6px rgba(0,0,0,0.5), 0 0 12px 2px rgba(150,220,120,0.6); } }
+  .plot .plot-icon { font-size: 1.6rem; line-height: 1; margin-bottom: 2px; }
+  .plot .plot-time { font-size: 0.65rem; opacity: 0.72; min-height: 0.85rem; text-align: center; }
+  .plot .plot-time.ready { color: #b6e3a3; font-weight: 700; opacity: 1; }
+  .plot .plot-time.paused { color: #d4a93a; }
+  .plot-bar { position: absolute; bottom: 4px; left: 6px; right: 6px; height: 3px; background: rgba(0,0,0,0.5); border-radius: 2px; overflow: hidden; }
+  .plot-bar > i { display: block; height: 100%; background: linear-gradient(90deg, #88c97a, #ffd980); border-radius: 2px; transition: width 0.4s ease-out; }
+  .species-picker { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 6px 0 10px; }
+  .species-row { display: flex; align-items: center; gap: 8px; padding: 8px; background: rgba(255,220,180,0.06); border: 1px solid rgba(255,220,180,0.15); border-radius: 10px; cursor: pointer; transition: background 0.15s, border-color 0.15s; min-height: 56px; }
+  .species-row:hover:not(.locked) { background: rgba(255,220,180,0.14); border-color: rgba(255,220,180,0.35); }
+  .species-row.locked { opacity: 0.45; cursor: not-allowed; }
+  .species-row .species-icon { font-size: 1.4rem; }
+  .species-row .species-info { flex: 1; min-width: 0; }
+  .species-row .species-name { font-size: 0.82rem; font-weight: 700; }
+  .species-row .species-desc { font-size: 0.66rem; opacity: 0.72; line-height: 1.3; margin-top: 1px; }
+  .species-row .species-cost { font-size: 0.7rem; color: #ffd980; font-weight: 700; flex-shrink: 0; }
+  .plot-detail-actions { display: flex; gap: 8px; margin-top: 10px; }
+  .plot-detail-actions button { flex: 1; padding: 8px; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.85rem; }
+  .plot-detail-actions .harvest-btn { background: linear-gradient(180deg, #88c97a, #4f8a3e); color: #1c2e16; }
+  .plot-detail-actions .harvest-btn:disabled { opacity: 0.5; cursor: default; }
+  .plot-detail-actions .clear-btn { background: rgba(160,80,80,0.5); color: #f0c4c4; }
+  .garden-summary { font-size: 0.72rem; opacity: 0.72; margin-top: 6px; line-height: 1.4; }
+  /* Pantheon */
+  .pantheon-slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 8px 0 14px; }
+  .pantheon-slot { background: rgba(0,0,0,0.35); border: 1px solid rgba(255,220,180,0.2); border-radius: 12px; padding: 10px 6px; text-align: center; cursor: pointer; min-height: 78px; transition: background 0.15s, border-color 0.15s; }
+  .pantheon-slot:hover { border-color: rgba(255,220,180,0.5); }
+  .pantheon-slot .slot-name { font-size: 0.7rem; opacity: 0.65; text-transform: uppercase; letter-spacing: 0.1em; }
+  .pantheon-slot .slot-weight { font-size: 0.65rem; color: #ffd980; opacity: 0.85; }
+  .pantheon-slot .slot-icon { font-size: 1.6rem; line-height: 1.2; }
+  .pantheon-slot .slot-name-filled { font-size: 0.78rem; font-weight: 700; margin-top: 2px; }
+  .pantheon-slot.empty .slot-icon { opacity: 0.3; }
+  .pantheon-pool { display: grid; grid-template-columns: 1fr; gap: 6px; }
+  .temperament { display: flex; gap: 10px; align-items: center; padding: 8px 10px; background: rgba(255,220,180,0.06); border: 1px solid rgba(255,220,180,0.15); border-radius: 10px; }
+  .temperament.slotted { background: rgba(255,220,180,0.18); border-color: rgba(255,220,180,0.45); }
+  .temperament .temp-icon { font-size: 1.5rem; }
+  .temperament .temp-name { font-weight: 700; font-size: 0.88rem; }
+  .temperament .temp-desc { font-size: 0.72rem; opacity: 0.72; margin-top: 1px; }
+  .temperament .temp-actions { display: flex; gap: 4px; flex-shrink: 0; }
+  .temperament .slot-btn { background: rgba(60,40,20,0.7); color: #ffd980; border: none; border-radius: 6px; padding: 4px 8px; font-size: 0.7rem; font-weight: 700; cursor: pointer; }
+  .temperament .slot-btn:disabled { opacity: 0.5; cursor: default; }
+  .temperament .slot-btn.unslot { background: rgba(160,80,80,0.5); color: #f0c4c4; }
+  /* Yeast Market */
+  .market-list { display: flex; flex-direction: column; gap: 6px; }
+  .market-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: rgba(255,220,180,0.06); border: 1px solid rgba(255,220,180,0.15); border-radius: 10px; }
+  .market-icon { font-size: 1.6rem; width: 32px; text-align: center; }
+  .market-info { flex: 1; min-width: 0; }
+  .market-name { font-weight: 700; font-size: 0.9rem; }
+  .market-meta { font-size: 0.7rem; opacity: 0.78; margin-top: 2px; }
+  .market-actions { display: flex; gap: 4px; flex-shrink: 0; }
+  .market-actions button { background: rgba(60,40,20,0.7); color: #ffd980; border: none; border-radius: 6px; padding: 6px 8px; font-size: 0.7rem; font-weight: 700; cursor: pointer; min-width: 36px; }
+  .market-actions button:disabled { opacity: 0.4; cursor: default; }
+  .market-actions button[data-act^="sell"] { background: rgba(70,90,50,0.7); color: #cfe9c9; }
