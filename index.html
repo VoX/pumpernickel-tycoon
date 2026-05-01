@@ -274,6 +274,8 @@ const TREATS = [
   { id: 'shower5',    icon: '🌠', name: 'Pumpernickel Nova',  desc: 'one-time. doubles your current pumpernickels.', cost: 10000000000,  costGrowth: 999, max: 1, doubleBank: true, requiresOwned: { factory: 10 } },
   { id: 'egg',        icon: '🥚', name: 'Hatch a Tinyclaw',   desc: 'companion. occasionally winks.', cost: 50000, costGrowth: 999, max: 1, hatch: true },
   { id: 'crowncake',  icon: '👑', name: 'Crown of the Tinyclaw', desc: 'a treat fit for a small dragon', cost: 500000, costGrowth: 999, max: 1 },
+  // Repurchasable insurance — consumed on the next debuff event.
+  { id: 'insurance',  icon: '☂️', name: 'Yeast Insurance',     desc: 'consumes itself to block the next debuff event.', cost: 5000, costGrowth: 1.8, requiresOwned: { apprentice: 5 } },
 ];
 
 const EVENTS = [
@@ -378,6 +380,7 @@ const CROWN_SHOP_ITEMS = [
   { id: 'steward',    icon: '🤵', name: 'Royal Steward',     desc: 'auto-buys the most rate-efficient treat every 5 seconds.',     cost: 20 },
   { id: 'ironKnuckles',icon: '🥊', name: 'Iron Knuckles',      desc: 'critical-tap chance becomes 10% (was 5%).',                  cost: 15 },
   { id: 'luckyHands', icon: '🎰', name: 'Lucky Hands',         desc: 'critical taps multiply by ×15 (was ×10).',                   cost: 25 },
+  { id: 'goldenChime',icon: '🔔', name: 'Golden Chime',         desc: 'plays a clear bell when a golden pumpernickel spawns.',     cost: 5 },
 ];
 const AUTO_BUY_INTERVAL_TICKS = 5;
 
@@ -478,6 +481,7 @@ const SFX = {
   ascend: () => { playTone(262, 700, 'sine', 0.1); playTone(330, 700, 'sine', 0.08); playTone(392, 700, 'sine', 0.06); },
   buff:   () => playSequence([{ f: 330, d: 60, v: 0.06 }, { f: 440, d: 60, v: 0.06 }, { f: 587, d: 100, v: 0.07 }]),
   debuff: () => playSequence([{ f: 330, d: 80, t: 'sawtooth', v: 0.06 }, { f: 220, d: 120, t: 'sawtooth', v: 0.07 }]),
+  chime:  () => playSequence([{ f: 1320, d: 130, t: 'triangle', v: 0.14 }, { f: 1760, d: 220, t: 'triangle', v: 0.14 }]),
 };
 function setMuted(v) {
   muted = v;
@@ -544,6 +548,21 @@ function tapAmount() {
   return (1 + bonus + fromRate) * comboTier() * globalMult();
 }
 function priceOf(t) { return Math.ceil(t.cost * Math.pow(t.costGrowth, state.owned[t.id] || 0)); }
+function lastPriceOf(t) {
+  const owned = state.owned[t.id] || 0;
+  if (owned <= 0) return 0;
+  return Math.ceil(t.cost * Math.pow(t.costGrowth, owned - 1));
+}
+function sellOne(t) {
+  const owned = state.owned[t.id] || 0;
+  if (owned <= 0) return;
+  const refund = Math.floor(lastPriceOf(t) * 0.5);
+  state.owned[t.id] = owned - 1;
+  state.count += refund;
+  // Lifetime isn't bumped — refunds recover past spend, not new earning.
+  toast(`sold 1 ${t.name} · +${fmt(refund)}`);
+  save(); renderCount(); refreshTreats(); refreshBakery();
+}
 function toast(msg) {
   const el = document.getElementById('toast');
   el.textContent = msg; el.classList.add('show');
@@ -611,7 +630,20 @@ function refreshBakery() {
       el.dataset.id = t.id;
       if (t.bobMs) el.style.setProperty('--bob', t.bobMs + 'ms');
       el.innerHTML = `<span class="asset-icon">${t.icon}</span><span class="asset-count">×${owned}</span>`;
-      el.addEventListener('click', () => toast(bakerInfo(t)));
+      // Tap = rate info; long-press (500ms) = confirm sell-back at 50% refund.
+      let pressTimer = null, longFired = false;
+      el.addEventListener('pointerdown', () => {
+        longFired = false;
+        pressTimer = setTimeout(() => {
+          longFired = true;
+          const refund = Math.floor(lastPriceOf(t) * 0.5);
+          if (confirm(`Sell 1 ${t.name} for ${fmt(refund)} pumpernickels?`)) sellOne(t);
+        }, 500);
+      });
+      const cancelPress = () => { clearTimeout(pressTimer); pressTimer = null; };
+      el.addEventListener('pointerup', () => { cancelPress(); if (!longFired) toast(bakerInfo(t)); });
+      el.addEventListener('pointercancel', cancelPress);
+      el.addEventListener('pointerleave', cancelPress);
       bakeryEl.appendChild(el);
       setTimeout(() => el.classList.remove('popin'), 400);
       row = bakeryAssetsById[t.id] = { el, countEl: el.querySelector('.asset-count'), owned };
@@ -834,6 +866,14 @@ function drainBanner() {
 function fireEvent() {
   if (passiveRate() === 0) return;
   const ev = EVENTS[Math.floor(Math.random() * EVENTS.length)];
+  // Yeast Insurance consumes one to block this debuff entirely.
+  const isDebuff = ev.kind === 'debuff' || (ev.kind === 'instant_pct' && ev.factor < 0);
+  if (isDebuff && (state.owned.insurance || 0) > 0) {
+    state.owned.insurance -= 1;
+    showBanner(`☂️ insurance blocked: ${ev.copy.split('.')[0]}`, 'buff');
+    save(); refreshTreats(); renderEffects();
+    return;
+  }
   // Buff streak: 3+ buffs in a row makes the next buff hit twice as hard.
   const streakHot = ev.kind === 'buff' && state.buffsConsecutive >= 3;
   if (ev.kind === 'instant') {
@@ -847,7 +887,7 @@ function fireEvent() {
     state.activeEffects.push({ id: ev.id, expiresAt: Date.now() + ev.duration, mult });
   }
   if (ev.kind === 'buff') state.buffsConsecutive++;
-  else if (ev.kind === 'debuff' || (ev.kind === 'instant_pct' && ev.factor < 0)) state.buffsConsecutive = 0;
+  else if (isDebuff) state.buffsConsecutive = 0;
   const copy = streakHot ? ev.copy + ' (streak ×2!)' : ev.copy;
   showBanner(copy, ev.kind);
   if (ev.kind === 'buff') SFX.buff();
@@ -866,6 +906,7 @@ function spawnGolden() {
   goldenEl.style.left = (Math.random() * 70 + 15) + '%';
   goldenEl.style.top = (Math.random() * 50 + 20) + '%';
   goldenEl.classList.add('active');
+  if (state.crownShop && state.crownShop.goldenChime) SFX.chime();
   goldenExpiresAt = Date.now() + GOLDEN_LIFETIME_MS;
   const myExpiry = goldenExpiresAt;
   setTimeout(() => {
