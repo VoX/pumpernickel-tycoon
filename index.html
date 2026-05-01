@@ -213,6 +213,17 @@
   .temperament .slot-btn { background: rgba(60,40,20,0.7); color: #ffd980; border: none; border-radius: 6px; padding: 4px 8px; font-size: 0.7rem; font-weight: 700; cursor: pointer; }
   .temperament .slot-btn:disabled { opacity: 0.5; cursor: default; }
   .temperament .slot-btn.unslot { background: rgba(160,80,80,0.5); color: #f0c4c4; }
+  /* Yeast Market */
+  .market-list { display: flex; flex-direction: column; gap: 6px; }
+  .market-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: rgba(255,220,180,0.06); border: 1px solid rgba(255,220,180,0.15); border-radius: 10px; }
+  .market-icon { font-size: 1.6rem; width: 32px; text-align: center; }
+  .market-info { flex: 1; min-width: 0; }
+  .market-name { font-weight: 700; font-size: 0.9rem; }
+  .market-meta { font-size: 0.7rem; opacity: 0.78; margin-top: 2px; }
+  .market-actions { display: flex; gap: 4px; flex-shrink: 0; }
+  .market-actions button { background: rgba(60,40,20,0.7); color: #ffd980; border: none; border-radius: 6px; padding: 6px 8px; font-size: 0.7rem; font-weight: 700; cursor: pointer; min-width: 36px; }
+  .market-actions button:disabled { opacity: 0.4; cursor: default; }
+  .market-actions button[data-act^="sell"] { background: rgba(70,90,50,0.7); color: #cfe9c9; }
 </style>
 </head>
 <body>
@@ -251,6 +262,7 @@
         <button class="menu-tab" data-tab="shop" role="tab">🪙 <span class="tab-label">Shop</span></button>
         <button class="menu-tab" data-tab="garden" role="tab">🌱 <span class="tab-label">Garden</span></button>
         <button class="menu-tab" data-tab="pantheon" role="tab">🏛️ <span class="tab-label">Pantheon</span></button>
+        <button class="menu-tab" data-tab="market" role="tab">📈 <span class="tab-label">Market</span></button>
         <button class="menu-tab" data-tab="ascend" role="tab">👑 <span class="tab-label">Ascend</span></button>
       </div>
       <div class="menu-pane" data-tab="ach">
@@ -261,6 +273,10 @@
       <div class="menu-pane" data-tab="shop" hidden>
         <div class="ach-sub" id="shop-sub"></div>
         <div id="shop-list"></div>
+      </div>
+      <div class="menu-pane" data-tab="market" hidden>
+        <div class="ach-sub" id="market-sub"></div>
+        <div class="market-list" id="market-list"></div>
       </div>
       <div class="menu-pane" data-tab="pantheon" hidden>
         <div class="ach-sub">slot 3 temperaments. each has a tradeoff. swaps cost 1 🍞.</div>
@@ -446,6 +462,18 @@ const GOLDEN_BUFFS = [
 ];
 const CRUMB_RIPEN_MS = 60 * 60 * 1000;  // ripe crumb every 1 hour real-time
 const PHASE_DURATION_MS = 30 * 60 * 1000; // each sourdough phase lasts ~30 min of play
+// Yeast Market — 5 commodities, prices fluctuate every 30s, influenced by your
+// bakery composition. Unlocks at 1T lifetime baked total.
+const MARKET_THRESHOLD = 1e12;
+const MARKET_PRICE_UPDATE_MS = 30000;
+const MARKET_HOLDING_CAP = 1000;
+const COMMODITIES = [
+  { id: 'flour',  icon: '🌾', name: 'Flour',  basePrice: 100,    bakerInfluence: 'mill' },
+  { id: 'salt',   icon: '🧂', name: 'Salt',   basePrice: 500,    bakerInfluence: 'oven' },
+  { id: 'butter', icon: '🧈', name: 'Butter', basePrice: 2500,   bakerInfluence: 'cow' },
+  { id: 'sugar',  icon: '🍬', name: 'Sugar',  basePrice: 12500,  bakerInfluence: 'wizard' },
+  { id: 'yeast',  icon: '🫧', name: 'Yeast',  basePrice: 60000,  bakerInfluence: 'apprentice' },
+];
 // Tinyclaw Pantheon — 3 weighted slots × 6 temperaments. Each has tradeoffs.
 const PANTHEON_SLOT_WEIGHTS = [1.5, 1.0, 0.5]; // heart, mind, belly
 const PANTHEON_SLOT_NAMES = ['Heart', 'Mind', 'Belly'];
@@ -515,6 +543,7 @@ function defaultState() {
     garden: emptyGarden(), barleyBonus: 0,
     burntCrusts: [],
     pantheon: [null, null, null],
+    market: { holdings: {}, prices: {}, lastUpdateAt: 0 },
     saveVersion: 3,
   };
 }
@@ -579,6 +608,11 @@ function load() {
     state.pantheon = (Array.isArray(s.pantheon) && s.pantheon.length === 3)
       ? s.pantheon.map(t => (typeof t === 'string' && TEMPERAMENTS.some(x => x.id === t)) ? t : null)
       : [null, null, null];
+    state.market = (s.market && typeof s.market === 'object') ? {
+      holdings: (s.market.holdings && typeof s.market.holdings === 'object') ? s.market.holdings : {},
+      prices: (s.market.prices && typeof s.market.prices === 'object') ? s.market.prices : {},
+      lastUpdateAt: typeof s.market.lastUpdateAt === 'number' ? s.market.lastUpdateAt : 0,
+    } : { holdings: {}, prices: {}, lastUpdateAt: 0 };
     state.saveVersion = 3;
     if (isV1) { localStorage.removeItem(SAVE_KEY_V1); save(); }
     const offlineCap = OFFLINE_CAP_SEC * (1 + pantheonMod('offline'));
@@ -1371,6 +1405,7 @@ function switchTab(tab) {
   else if (tab === 'ascend') openAscendPane();
   else if (tab === 'garden') renderGarden();
   else if (tab === 'pantheon') renderPantheon();
+  else if (tab === 'market') renderMarket();
 }
 function refreshMenu() {
   // Tab availability gates content rather than hiding tabs.
@@ -1382,6 +1417,8 @@ function refreshMenu() {
   if (gardenTab) gardenTab.disabled = (state.crumbs || 0) === 0 && state.garden && state.garden.every(p => !p.species);
   const pantheonTab = document.querySelector('.menu-tab[data-tab="pantheon"]');
   if (pantheonTab) pantheonTab.disabled = (state.ascensions || 0) < 1;
+  const marketTab = document.querySelector('.menu-tab[data-tab="market"]');
+  if (marketTab) marketTab.disabled = (state.lifetimeBaked || 0) + state.lifetime < MARKET_THRESHOLD;
   // If active tab is now disabled, fall back to ach.
   const activeBtn = document.querySelector(`.menu-tab[data-tab="${activeTab}"]`);
   if (activeBtn && activeBtn.disabled) { activeTab = 'ach'; }
@@ -1447,6 +1484,7 @@ document.getElementById('ascend-confirm').addEventListener('click', () => {
     garden: state.garden || emptyGarden(),
     barleyBonus: state.barleyBonus || 0,
     pantheon: state.pantheon || [null, null, null],
+    market: state.market || { holdings: {}, prices: {}, lastUpdateAt: 0 },
   };
   state = Object.assign(defaultState(), carry);
   if (shop.reinforced) state.owned.apprentice = (state.owned.apprentice || 0) + 1;
@@ -1736,6 +1774,113 @@ function renderGarden() {
   if (gardenSummaryEl) gardenSummaryEl.textContent = `crumbs: ${state.crumbs || 0} · barley harvests cap at +${(GARDEN_BARLEY_CAP * 100).toFixed(0)}% (currently +${(gardenBonus() * 100).toFixed(1)}%)`;
 }
 if (waterBtnEl) waterBtnEl.addEventListener('click', waterRandomPlot);
+
+// Yeast Market — commodity arbitrage. Prices fluctuate every 30s.
+const marketRowsEl = (() => null); // built lazily by renderMarket
+function updateMarketPrices() {
+  const now = Date.now();
+  if (now - (state.market.lastUpdateAt || 0) < MARKET_PRICE_UPDATE_MS) return;
+  state.market.lastUpdateAt = now;
+  for (const c of COMMODITIES) {
+    // Random walk ±50%, plus +5% per 10 of the influencing baker (more bakers
+    // = your supply is plentiful, market price is higher when you sell).
+    const noise = 0.5 + Math.random();
+    const ownedCount = state.owned[c.bakerInfluence] || 0;
+    const influence = 1 + 0.05 * (ownedCount / 10);
+    state.market.prices[c.id] = Math.max(1, Math.floor(c.basePrice * noise * influence));
+  }
+}
+function buyCommodity(id) {
+  const c = COMMODITIES.find(x => x.id === id);
+  if (!c) return;
+  const price = state.market.prices[id] || c.basePrice;
+  const held = state.market.holdings[id] || 0;
+  if (held >= MARKET_HOLDING_CAP) { toast(`max holdings (${MARKET_HOLDING_CAP}) reached`); return; }
+  if (state.count < price) { toast(`not enough pumpernickels`); return; }
+  state.count -= price;
+  state.market.holdings[id] = held + 1;
+  save(); renderCount(); renderMarket();
+}
+function sellCommodity(id) {
+  const c = COMMODITIES.find(x => x.id === id);
+  if (!c) return;
+  const price = state.market.prices[id] || c.basePrice;
+  const held = state.market.holdings[id] || 0;
+  if (held <= 0) return;
+  state.market.holdings[id] = held - 1;
+  state.count += price;
+  // Lifetime increments only if profit > average buy price (we don't track avg
+  // cost basis, so credit lifetime conservatively at 50% of sale price).
+  state.lifetime += Math.floor(price * 0.5);
+  save(); renderCount(); renderMarket();
+}
+function buyMaxCommodity(id) {
+  const c = COMMODITIES.find(x => x.id === id);
+  if (!c) return;
+  const price = state.market.prices[id] || c.basePrice;
+  const held = state.market.holdings[id] || 0;
+  const slots = MARKET_HOLDING_CAP - held;
+  const affordable = Math.floor(state.count / price);
+  const qty = Math.min(slots, affordable);
+  if (qty <= 0) return;
+  state.count -= qty * price;
+  state.market.holdings[id] = held + qty;
+  save(); renderCount(); renderMarket();
+}
+function sellAllCommodity(id) {
+  const c = COMMODITIES.find(x => x.id === id);
+  if (!c) return;
+  const price = state.market.prices[id] || c.basePrice;
+  const held = state.market.holdings[id] || 0;
+  if (held <= 0) return;
+  state.count += held * price;
+  state.lifetime += Math.floor(held * price * 0.5);
+  state.market.holdings[id] = 0;
+  save(); renderCount(); renderMarket();
+}
+function renderMarket() {
+  const list = document.getElementById('market-list');
+  if (!list) return;
+  updateMarketPrices();
+  list.innerHTML = '';
+  for (const c of COMMODITIES) {
+    const price = state.market.prices[c.id] || c.basePrice;
+    const held = state.market.holdings[c.id] || 0;
+    const baseline = c.basePrice;
+    const delta = ((price / baseline - 1) * 100).toFixed(0);
+    const trend = price > baseline ? `<span style="color:#cfe9c9">+${delta}%</span>` : `<span style="color:#f0c4c4">${delta}%</span>`;
+    const row = document.createElement('div');
+    row.className = 'market-row';
+    row.innerHTML = `
+      <div class="market-icon">${c.icon}</div>
+      <div class="market-info">
+        <div class="market-name">${c.name}</div>
+        <div class="market-meta">price ${fmt(price)} · ${trend} · holding ${held}/${MARKET_HOLDING_CAP}</div>
+      </div>
+      <div class="market-actions">
+        <button data-act="buy"     data-id="${c.id}" ${state.count < price || held >= MARKET_HOLDING_CAP ? 'disabled' : ''}>buy</button>
+        <button data-act="buy-max" data-id="${c.id}" ${state.count < price || held >= MARKET_HOLDING_CAP ? 'disabled' : ''}>max</button>
+        <button data-act="sell"    data-id="${c.id}" ${held <= 0 ? 'disabled' : ''}>sell</button>
+        <button data-act="sell-all" data-id="${c.id}" ${held <= 0 ? 'disabled' : ''}>all</button>
+      </div>
+    `;
+    list.appendChild(row);
+  }
+  list.querySelectorAll('button[data-act]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const act = btn.dataset.act, id = btn.dataset.id;
+      if (act === 'buy') buyCommodity(id);
+      else if (act === 'buy-max') buyMaxCommodity(id);
+      else if (act === 'sell') sellCommodity(id);
+      else if (act === 'sell-all') sellAllCommodity(id);
+    });
+  });
+  const sub = document.getElementById('market-sub');
+  if (sub) {
+    const next = Math.max(0, MARKET_PRICE_UPDATE_MS - (Date.now() - (state.market.lastUpdateAt || 0)));
+    sub.textContent = `prices refresh every 30s. owned bakers raise the matching commodity price. next refresh ${Math.ceil(next/1000)}s.`;
+  }
+}
 
 // Tinyclaw Pantheon — slot 3 temperaments with weighted effects.
 const pantheonSlotsEl = document.getElementById('pantheon-slots');
