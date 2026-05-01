@@ -10,7 +10,7 @@
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
   html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; background: linear-gradient(180deg, #2d1810 0%, #5c3a26 100%); color: #f4e9d8; touch-action: manipulation; }
   body { display: flex; flex-direction: column; height: 100dvh; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
-  header { padding: 16px; text-align: center; position: relative; }
+  header { padding: 60px 60px 12px; text-align: center; position: relative; }
   .count-row { display: flex; align-items: center; justify-content: center; gap: 10px; }
   .count { font-size: 2.4rem; font-weight: 800; letter-spacing: -0.02em; transition: transform 0.12s; }
   .count.bump { transform: scale(1.18); }
@@ -59,17 +59,22 @@
   .owned { font-size: 0.7rem; opacity: 0.65; margin-top: 2px; min-height: 0.9rem; }
   .toast { position: fixed; bottom: 60vh; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.9); padding: 10px 16px; border-radius: 10px; font-size: 0.85rem; opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 100; max-width: 90vw; text-align: center; }
   .toast.show { opacity: 1; }
-  .topbtn { position: fixed; top: 10px; background: rgba(0,0,0,0.4); color: rgba(255,255,255,0.85); border: none; padding: 12px 14px; border-radius: 10px; font-size: 0.78rem; cursor: pointer; z-index: 50; min-height: 44px; min-width: 44px; }
+  /* Topbtn = corner-anchored fixed buttons. Header has padding to clear them. */
+  .topbtn { position: fixed; top: calc(env(safe-area-inset-top) + 8px); background: rgba(0,0,0,0.4); color: rgba(255,255,255,0.85); border: none; padding: 12px 14px; border-radius: 10px; font-size: 0.78rem; cursor: pointer; z-index: 50; min-height: 44px; min-width: 44px; }
   .topbtn:hover { color: #fff; background: rgba(0,0,0,0.6); }
   #ach-btn { left: 8px; }
-  #help-btn { right: 60px; font-size: 1rem; font-weight: 800; min-width: 44px; }
-  #mute-btn { right: 8px; font-size: 1rem; min-width: 44px; }
-  #ascend-btn { left: 50%; transform: translateX(-50%); background: linear-gradient(180deg, #d4a93a, #a87a18); color: #2d1810; font-weight: 800; }
-  #ascend-btn:hover { background: linear-gradient(180deg, #ffd060, #c98a18); }
-  #shop-btn { left: 8px; top: 62px; background: rgba(60,40,20,0.6); }
-  /* Reset is moved to a dim corner footer to avoid misclicks next to ascend/shop. */
+  #help-btn { right: 60px; font-size: 1rem; font-weight: 800; }
+  #mute-btn { right: 8px; font-size: 1rem; }
+  /* Reset hides bottom-right to avoid misclicks. */
   #reset { right: 8px; bottom: calc(env(safe-area-inset-bottom) + 4px); top: auto; padding: 8px 10px; font-size: 0.62rem; color: rgba(255,255,255,0.32); background: transparent; min-height: 0; min-width: 0; }
   #reset:hover { color: rgba(255,255,255,0.6); background: rgba(0,0,0,0.3); }
+  /* Shop + ascend are inline in the header, beneath effects, never overlaying the count. */
+  .header-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 10px; }
+  .header-actions:empty { margin: 0; }
+  .header-btn { background: rgba(60,40,20,0.6); color: rgba(255,255,255,0.9); border: none; padding: 10px 14px; border-radius: 10px; font-size: 0.85rem; cursor: pointer; min-height: 40px; }
+  .header-btn:hover { background: rgba(60,40,20,0.85); }
+  #ascend-btn { background: linear-gradient(180deg, #d4a93a, #a87a18); color: #2d1810; font-weight: 800; }
+  #ascend-btn:hover { background: linear-gradient(180deg, #ffd060, #c98a18); }
   .event-banner { position: fixed; top: calc(env(safe-area-inset-top) + 12px); left: 50%; transform: translateX(-50%) translateY(-20px); padding: 10px 16px; background: rgba(40,20,10,0.94); border: 1px solid rgba(255,220,180,0.35); border-radius: 10px; max-width: 90vw; font-size: 0.85rem; z-index: 200; opacity: 0; transition: opacity 0.3s, transform 0.3s; pointer-events: none; }
   .event-banner.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   .event-banner.kind-buff { border-color: rgba(120,200,120,0.6); }
@@ -133,6 +138,10 @@
     <div class="rate" id="rate"></div>
     <div class="streak" id="streak"></div>
     <div class="effects" id="effects" aria-label="Active effects"></div>
+    <div class="header-actions">
+      <button class="header-btn" id="shop-btn" aria-label="Crown Shop" hidden>🪙 <span id="shop-info">Shop</span></button>
+      <button class="header-btn" id="ascend-btn" aria-label="Ascend the Tinyclaw" hidden>👑 <span id="ascend-info">Ascend</span></button>
+    </div>
   </header>
   <main>
     <div class="pump" id="pump" role="button" aria-label="Tap to collect a pumpernickel">🍞</div>
@@ -143,8 +152,6 @@
     <div id="treats"></div>
   </section>
   <button class="topbtn" id="ach-btn" aria-label="Achievements">🏆 <span id="ach-count"></span></button>
-  <button class="topbtn" id="ascend-btn" aria-label="Ascend the Tinyclaw" hidden>👑 <span id="ascend-info">Ascend</span></button>
-  <button class="topbtn" id="shop-btn" aria-label="Crown Shop" hidden>🪙 <span id="shop-info">Shop</span></button>
   <button class="topbtn" id="help-btn" aria-label="How to play">?</button>
   <button class="topbtn" id="mute-btn" aria-label="Toggle sound">🔊</button>
   <button class="topbtn" id="reset" aria-label="Reset save">RESET</button>
