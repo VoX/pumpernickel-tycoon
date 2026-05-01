@@ -930,11 +930,11 @@ function fireAura() {
 // gravity (spring) pulls depth back to 0; drag damps the motion.
 let pumpDepth = 0;
 let pumpVelocity = 0;
-const PUMP_SPRING = 60;            // depth-units / s² per depth unit (k)
-const PUMP_DRAG = 8;               // velocity damping coefficient (c)
-const PUMP_CLICK_IMPULSE = 2.0;    // velocity added per click (depth-units / s)
-const PUSH_MAX = 1.2;              // depth ceiling — bread can't be pushed past this
-const PUSH_SCALE_AT_MAX = 0.65;    // visual scale at max depth
+const PUMP_SPRING = 140;           // depth-units / s² per depth unit (k)
+const PUMP_DRAG = 9;               // velocity damping coefficient (c)
+const PUMP_CLICK_IMPULSE = 4.5;    // velocity added per click (depth-units / s)
+const PUSH_MAX = 1.5;              // depth ceiling — bread can't be pushed past this
+const PUSH_SCALE_AT_MAX = 0.6;     // visual scale at max depth
 let pumpDepthLast = performance.now();
 function pumpDepthFrame(now) {
   let dt = (now - pumpDepthLast) / 1000;
