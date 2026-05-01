@@ -57,6 +57,7 @@
   #ach-btn { left: 8px; }
   #ascend-btn { left: 50%; transform: translateX(-50%); background: linear-gradient(180deg, #d4a93a, #a87a18); color: #2d1810; font-weight: 800; }
   #ascend-btn:hover { background: linear-gradient(180deg, #ffd060, #c98a18); }
+  #shop-btn { left: 8px; top: 38px; background: rgba(60,40,20,0.6); }
   #reset { right: 8px; font-size: 0.65rem; color: rgba(255,255,255,0.5); }
   .event-banner { position: fixed; top: calc(env(safe-area-inset-top) + 12px); left: 50%; transform: translateX(-50%) translateY(-20px); padding: 10px 16px; background: rgba(40,20,10,0.94); border: 1px solid rgba(255,220,180,0.35); border-radius: 10px; max-width: 90vw; font-size: 0.85rem; z-index: 200; opacity: 0; transition: opacity 0.3s, transform 0.3s; pointer-events: none; }
   .event-banner.show { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -119,6 +120,7 @@
   </section>
   <button class="topbtn" id="ach-btn" aria-label="Achievements">🏆 <span id="ach-count"></span></button>
   <button class="topbtn" id="ascend-btn" aria-label="Ascend the Tinyclaw" hidden>👑 <span id="ascend-info">Ascend</span></button>
+  <button class="topbtn" id="shop-btn" aria-label="Crown Shop" hidden>🪙 <span id="shop-info">Shop</span></button>
   <button class="topbtn" id="reset" aria-label="Reset save">RESET</button>
   <div class="toast" id="toast"></div>
   <div class="event-banner" id="event-banner"></div>
@@ -139,6 +141,14 @@
       <div class="ach-sub">trade your kingdom for crowns. each crown grants +5% rate forever.</div>
       <div id="ascend-detail" style="font-size: 0.9rem; line-height: 1.6; padding: 6px 4px;"></div>
       <button id="ascend-confirm" style="margin-top: 12px; width: 100%; padding: 12px; background: linear-gradient(180deg, #d4a93a, #a87a18); color: #2d1810; border: none; border-radius: 10px; font-weight: 800; font-size: 0.95rem; cursor: pointer;">Ascend</button>
+    </div>
+  </div>
+  <div class="ach-modal" id="shop-modal" role="dialog" aria-label="Crown Shop">
+    <div class="ach-card">
+      <button class="ach-close" id="shop-close" aria-label="Close">×</button>
+      <div class="ach-title">🪙 Crown Shop</div>
+      <div class="ach-sub" id="shop-sub"></div>
+      <div id="shop-list"></div>
     </div>
   </div>
 <script>
@@ -274,6 +284,12 @@ const GOLDEN_BONUS_FALLBACK = 100; // floor for early game when rate=0
 const ASCEND_THRESHOLD = 1e9;       // 1B lifetime to unlock first ascension
 const CROWN_DIVISOR = 1e9;          // crowns earned = floor(sqrt(lifetime / divisor))
 const CROWN_BONUS_PER = 0.05;       // each crown adds +5% to global rate
+const CROWN_SHOP_ITEMS = [
+  { id: 'reinforced', icon: '🥖', name: 'Reinforced Recipe', desc: 'each ascension begins with 1 free apprentice baker.',         cost: 3 },
+  { id: 'pacing',     icon: '⏱️', name: 'Cosmic Pacing',     desc: 'chaos events fire 33% sooner.',                                cost: 8 },
+  { id: 'royalLedger',icon: '📜', name: 'Royal Ledger',      desc: 'each crown contributes +6% rate instead of +5%.',              cost: 10 },
+  { id: 'eternalEgg', icon: '🐣', name: 'Eternal Egg',       desc: 'the tinyclaw companion persists through every ascension.',     cost: 15 },
+];
 
 function defaultState() {
   return {
@@ -281,7 +297,7 @@ function defaultState() {
     achievements: {}, totalTaps: 0, longestStreak: 0,
     buffsConsecutive: 0, startedAt: Date.now(), hasEgg: false,
     activeEffects: [], criticalTaps: 0, goldensClicked: 0,
-    crowns: 0, ascensions: 0, lifetimeBaked: 0, saveVersion: 3,
+    crowns: 0, ascensions: 0, lifetimeBaked: 0, crownShop: {}, saveVersion: 3,
   };
 }
 
@@ -316,6 +332,7 @@ function load() {
     state.crowns = typeof s.crowns === 'number' ? s.crowns : 0;
     state.ascensions = typeof s.ascensions === 'number' ? s.ascensions : 0;
     state.lifetimeBaked = typeof s.lifetimeBaked === 'number' ? s.lifetimeBaked : 0;
+    state.crownShop = (s.crownShop && typeof s.crownShop === 'object') ? s.crownShop : {};
     state.lastTick = typeof s.lastTick === 'number' ? s.lastTick : Date.now();
     state.saveVersion = 3;
     if (isV1) { localStorage.removeItem(SAVE_KEY_V1); save(); }
@@ -355,7 +372,11 @@ function achievementBonus() {
   return Object.keys(state.achievements || {}).length * ACH_BONUS_PER_UNLOCK;
 }
 function crownBonus() {
-  return (state.crowns || 0) * CROWN_BONUS_PER;
+  const per = state.crownShop && state.crownShop.royalLedger ? 0.06 : CROWN_BONUS_PER;
+  return (state.crowns || 0) * per;
+}
+function eventPaceFactor() {
+  return state.crownShop && state.crownShop.pacing ? 0.66 : 1;
 }
 function globalMult() { return (1 + achievementBonus() + crownBonus()) * effectMultiplier(); }
 function rate() { return passiveRate() * globalMult(); }
@@ -406,6 +427,11 @@ const ascendBtnEl = document.getElementById('ascend-btn');
 const ascendModalEl = document.getElementById('ascend-modal');
 const ascendDetailEl = document.getElementById('ascend-detail');
 const ascendInfoEl = document.getElementById('ascend-info');
+const shopBtnEl = document.getElementById('shop-btn');
+const shopModalEl = document.getElementById('shop-modal');
+const shopSubEl = document.getElementById('shop-sub');
+const shopListEl = document.getElementById('shop-list');
+const shopInfoEl = document.getElementById('shop-info');
 const bakeryAssetsById = {}; // built lazily by refreshBakery()
 
 function refreshBakery() {
@@ -594,7 +620,7 @@ function fireEvent() {
   save(); renderCount(); checkAchievements();
 }
 function scheduleNextEvent() {
-  const wait = EVENT_MIN_MS + Math.random() * (EVENT_MAX_MS - EVENT_MIN_MS);
+  const wait = (EVENT_MIN_MS + Math.random() * (EVENT_MAX_MS - EVENT_MIN_MS)) * eventPaceFactor();
   setTimeout(() => { fireEvent(); scheduleNextEvent(); }, wait);
 }
 
@@ -725,19 +751,22 @@ document.getElementById('ascend-confirm').addEventListener('click', () => {
   if (gain <= 0) { ascendModalEl.classList.remove('show'); return; }
   // Carry forward: economy resets, but progression markers persist so unlocked
   // achievements stay coherent (no vanishing egg, no re-armed 24h timer, etc).
+  const shop = state.crownShop || {};
   const carry = {
     crowns: (state.crowns || 0) + gain,
     ascensions: (state.ascensions || 0) + 1,
     lifetimeBaked: (state.lifetimeBaked || 0) + state.lifetime,
     achievements: state.achievements || {},
+    crownShop: shop,
     totalTaps: state.totalTaps || 0,
     longestStreak: state.longestStreak || 0,
     criticalTaps: state.criticalTaps || 0,
     goldensClicked: state.goldensClicked || 0,
-    hasEgg: !!state.hasEgg,
+    hasEgg: !!state.hasEgg || !!shop.eternalEgg,
     startedAt: state.startedAt || Date.now(),
   };
   state = Object.assign(defaultState(), carry);
+  if (shop.reinforced) state.owned.apprentice = (state.owned.apprentice || 0) + 1;
   streakCount = 0;
   lastRenderedCount = -1; lastRenderedRate = -1; lastStreakTier = -1;
   setPumpEmoji();
@@ -745,8 +774,59 @@ document.getElementById('ascend-confirm').addEventListener('click', () => {
   const flash = document.getElementById('ascend-flash');
   flash.classList.remove('show'); void flash.offsetWidth; flash.classList.add('show');
   toast(`✨ ascended. +${gain}👑 — total ${state.crowns}`);
-  save(); renderCount(); refreshTreats(); refreshBakery(); renderAchPanel(); refreshAscend();
+  save(); renderCount(); refreshTreats(); refreshBakery(); renderAchPanel(); refreshAscend(); refreshShop();
 });
+
+// Crown Shop — spend crowns on permanent meta-upgrades.
+function refreshShop() {
+  // Show the shop button once player has made at least one ascension.
+  shopBtnEl.hidden = (state.ascensions || 0) < 1;
+  shopInfoEl.textContent = `${state.crowns || 0}👑`;
+}
+function renderShop() {
+  shopSubEl.textContent = `you have ${state.crowns || 0}👑 to spend.`;
+  shopListEl.innerHTML = '';
+  for (const item of CROWN_SHOP_ITEMS) {
+    const owned = !!(state.crownShop && state.crownShop[item.id]);
+    const affordable = (state.crowns || 0) >= item.cost;
+    const row = document.createElement('div');
+    row.className = 'ach-row' + (owned ? '' : (affordable ? '' : ' locked'));
+    row.innerHTML = `
+      <div class="icon">${item.icon}</div>
+      <div class="info" style="flex:1; min-width:0">
+        <div class="name">${item.name}</div>
+        <div class="desc">${item.desc}</div>
+      </div>
+      <button data-id="${item.id}" ${owned || !affordable ? 'disabled' : ''}
+        style="background: ${owned ? '#446644' : (affordable ? 'linear-gradient(180deg, #d4a93a, #a87a18)' : 'rgba(80,60,40,0.5)')}; color: ${owned ? '#cfe6cf' : '#2d1810'}; border: none; border-radius: 8px; padding: 6px 10px; font-weight: 800; cursor: ${owned||!affordable ? 'default' : 'pointer'}; min-width: 64px;">
+        ${owned ? 'owned' : item.cost + '👑'}
+      </button>
+    `;
+    shopListEl.appendChild(row);
+  }
+  shopListEl.querySelectorAll('button[data-id]').forEach(btn => {
+    btn.addEventListener('click', () => buyShopItem(btn.dataset.id));
+  });
+}
+function buyShopItem(id) {
+  const item = CROWN_SHOP_ITEMS.find(x => x.id === id);
+  if (!item) return;
+  if (state.crownShop && state.crownShop[id]) return;
+  if ((state.crowns || 0) < item.cost) return;
+  state.crowns -= item.cost;
+  state.crownShop = state.crownShop || {};
+  state.crownShop[id] = true;
+  // Some items take effect immediately on the current run.
+  if (id === 'eternalEgg') state.hasEgg = true;
+  if (id === 'reinforced') state.owned.apprentice = (state.owned.apprentice || 0) + 1;
+  toast(`🪙 ${item.name}`);
+  save();
+  renderShop(); refreshShop(); refreshAscend();
+  setPumpEmoji(); refreshTreats(); refreshBakery();
+}
+shopBtnEl.addEventListener('click', () => { renderShop(); shopModalEl.classList.add('show'); });
+document.getElementById('shop-close').addEventListener('click', () => shopModalEl.classList.remove('show'));
+shopModalEl.addEventListener('click', (e) => { if (e.target === shopModalEl) shopModalEl.classList.remove('show'); });
 
 document.getElementById('reset').addEventListener('click', () => {
   if (!confirm('Reset all progress?')) return;
@@ -756,7 +836,7 @@ document.getElementById('reset').addEventListener('click', () => {
   streakCount = 0;
   lastRenderedCount = -1; lastRenderedRate = -1; lastStreakTier = -1;
   setPumpEmoji();
-  renderCount(); refreshTreats(); refreshBakery(); renderAchPanel(); refreshAscend();
+  renderCount(); refreshTreats(); refreshBakery(); renderAchPanel(); refreshAscend(); refreshShop();
 });
 
 // Tick — passive accumulation + treat-affordability refresh + achievement check.
@@ -769,6 +849,7 @@ setInterval(() => {
   renderCount();
   refreshTreats();
   refreshAscend();
+  refreshShop();
   checkAchievements();
 }, TICK_MS);
 setInterval(save, SAVE_INTERVAL_MS);
@@ -781,6 +862,7 @@ setPumpEmoji();
 renderCount();
 renderAchPanel();
 refreshAscend();
+refreshShop();
 setTimeout(() => scheduleNextEvent(), FIRST_EVENT_DELAY);
 scheduleNextGolden();
 scheduleWink();
