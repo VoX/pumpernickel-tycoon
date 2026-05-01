@@ -294,7 +294,9 @@ const CROWN_SHOP_ITEMS = [
   { id: 'pacing',     icon: '⏱️', name: 'Cosmic Pacing',     desc: 'chaos events fire 33% sooner.',                                cost: 8 },
   { id: 'royalLedger',icon: '📜', name: 'Royal Ledger',      desc: 'each crown contributes +6% rate instead of +5%.',              cost: 10 },
   { id: 'eternalEgg', icon: '🐣', name: 'Eternal Egg',       desc: 'the tinyclaw companion persists through every ascension.',     cost: 15 },
+  { id: 'steward',    icon: '🤵', name: 'Royal Steward',     desc: 'auto-buys the most rate-efficient treat every 5 seconds.',     cost: 30 },
 ];
+const AUTO_BUY_INTERVAL_TICKS = 5;
 
 function defaultState() {
   return {
@@ -570,6 +572,27 @@ function buy(t) {
   if (t.id === 'crowncake') { toast('👑 the kingdom kneels.'); setPumpEmoji(); }
   save(); renderCount(); refreshTreats(); refreshBakery(); checkAchievements();
 }
+// Pick the rate-upgrade with the best rate-gain per pumpernickel spent.
+// Mirrors bestRateBuy() in balance/simulate.js so auto-buy and manual play
+// converge on the same purchase order.
+function bestRateBuy() {
+  let best = null, bestEff = 0;
+  for (const t of TREATS) {
+    if (t.max && (state.owned[t.id] || 0) >= t.max) continue;
+    if (!meetsRequirement(t)) continue;
+    let effRate = 0;
+    if (t.rate) effRate = t.rate;
+    if (t.synergyTarget) {
+      const targ = TREATS.find(x => x.id === t.synergyTarget);
+      const owned = state.owned[t.synergyTarget] || 0;
+      if (targ && owned > 0) effRate = (targ.rate * owned) * (t.synergyMult - 1);
+    }
+    if (effRate <= 0) continue;
+    const eff = effRate / priceOf(t);
+    if (eff > bestEff) { bestEff = eff; best = t; }
+  }
+  return best;
+}
 
 function checkAchievements() {
   let any = false;
@@ -844,12 +867,18 @@ document.getElementById('reset').addEventListener('click', () => {
 });
 
 // Tick — passive accumulation + treat-affordability refresh + achievement check.
+let tickCount = 0;
 setInterval(() => {
+  tickCount++;
   const now = Date.now();
   state.activeEffects = state.activeEffects.filter(e => now < e.expiresAt);
   const r = rate();
   if (r > 0) { state.count += r; state.lifetime += r; }
   state.lastTick = now;
+  if (state.crownShop && state.crownShop.steward && tickCount % AUTO_BUY_INTERVAL_TICKS === 0) {
+    const t = bestRateBuy();
+    if (t && state.count >= priceOf(t)) buy(t);
+  }
   renderCount();
   refreshTreats();
   refreshAscend();
