@@ -732,13 +732,12 @@ function phaseTreatDiscount() { return currentPhase().treatDiscount || 1; }
 function achievementBonus() {
   return Object.keys(state.achievements || {}).length * ACH_BONUS_PER_UNLOCK * (1 + pantheonMod('achBonus'));
 }
+function hasCrown(id) { return !!(state.crownShop && state.crownShop[id]); }
 function crownBonus() {
-  const per = state.crownShop && state.crownShop.royalLedger ? CROWN_BONUS_LEDGER : CROWN_BONUS_PER;
-  return (state.crowns || 0) * per;
+  return (state.crowns || 0) * (hasCrown('royalLedger') ? CROWN_BONUS_LEDGER : CROWN_BONUS_PER);
 }
 function eventPaceFactor() {
-  let f = state.crownShop && state.crownShop.pacing ? EVENT_PACE_PACING : 1;
-  // Hops boosts chaos pace (events fire faster while any hops buff is live).
+  let f = hasCrown('pacing') ? EVENT_PACE_PACING : 1;
   if (hasGardenChaosBoost()) f *= (1 / SPECIES.find(s => s.id === 'hops').chaosPaceMult);
   return f;
 }
@@ -1090,7 +1089,15 @@ function bestRateBuy() {
     if (t.synergyTarget) {
       const targ = TREATS.find(x => x.id === t.synergyTarget);
       const owned = state.owned[t.synergyTarget] || 0;
-      if (targ && owned > 0) effRate = (targ.rate * owned) * (t.synergyMult - 1);
+      if (targ && owned > 0) {
+        // Account for already-owned synergy mults — adding tier-3 stacks on top
+        // of tier-1+2 the player already has, so the effective gain reflects that.
+        let existingSynergy = 1;
+        for (const s of TREATS) {
+          if (s.synergyTarget === t.synergyTarget && s.id !== t.id && (state.owned[s.id] || 0) > 0) existingSynergy *= s.synergyMult;
+        }
+        effRate = (targ.rate * owned * existingSynergy) * (t.synergyMult - 1);
+      }
     }
     if (effRate <= 0) continue;
     const eff = effRate / priceOf(t);
@@ -1194,7 +1201,7 @@ function spawnGolden() {
   goldenEl.style.left = (Math.random() * 70 + 15) + '%';
   goldenEl.style.top = (Math.random() * 50 + 20) + '%';
   goldenEl.classList.add('active');
-  if (state.crownShop && state.crownShop.goldenChime) SFX.chime();
+  if (hasCrown('goldenChime')) SFX.chime();
   goldenExpiresAt = Date.now() + GOLDEN_LIFETIME_MS;
   const myExpiry = goldenExpiresAt;
   setTimeout(() => {
@@ -1361,9 +1368,9 @@ pumpEl.addEventListener('pointerdown', (e) => {
   pumpVelocity += PUMP_CLICK_IMPULSE; // physics: click adds velocity, spring/drag handles the rest
   startPumpFrame();
 
-  const baseCritChance = (state.crownShop && state.crownShop.ironKnuckles) ? 0.10 : CRIT_CHANCE;
+  const baseCritChance = hasCrown('ironKnuckles') ? 0.10 : CRIT_CHANCE;
   const critChance = Math.max(0, baseCritChance * (1 + pantheonMod('crit')));
-  const critMult = (state.crownShop && state.crownShop.luckyHands) ? 15 : CRIT_MULT;
+  const critMult = hasCrown('luckyHands') ? 15 : CRIT_MULT;
   const crit = Math.random() < critChance;
   const gain = Math.floor(tapAmount() * (crit ? critMult : 1));
   state.count += gain; state.lifetime += gain; state.totalTaps++;
@@ -1991,7 +1998,7 @@ setInterval(() => {
   const r = rate();
   if (r > 0) { state.count += r; state.lifetime += r; }
   state.lastTick = now;
-  if (state.crownShop && state.crownShop.steward && tickCount % AUTO_BUY_INTERVAL_TICKS === 0) {
+  if (hasCrown('steward') && tickCount % AUTO_BUY_INTERVAL_TICKS === 0) {
     const t = bestRateBuy();
     if (t && state.count >= priceOf(t)) buy(t);
   }

@@ -92,10 +92,15 @@ function bestRateBuy(state) {
     let effRate = 0;
     if (t.rate) effRate = t.rate;
     if (t.synergyTarget) {
-      // Approximate: synergy gives mult-1 of the target's current contribution
       const targ = TREATS.find(x => x.id === t.synergyTarget);
       const owned = state.owned[t.synergyTarget] || 0;
-      if (targ && owned > 0) effRate = (targ.rate * owned) * (t.synergyMult - 1);
+      if (targ && owned > 0) {
+        let existing = 1;
+        for (const s of TREATS) {
+          if (s.synergyTarget === t.synergyTarget && s.id !== t.id && (state.owned[s.id] || 0) > 0) existing *= s.synergyMult;
+        }
+        effRate = (targ.rate * owned * existing) * (t.synergyMult - 1);
+      }
     }
     if (effRate <= 0) continue;
     const eff = effRate / price;
