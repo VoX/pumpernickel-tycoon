@@ -28,6 +28,11 @@
   .pump.combo-3 { filter: drop-shadow(0 0 44px rgba(255,80,20,1)); animation: pulse 0.6s ease-in-out infinite; }
   @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.05); } }
   .float { position: absolute; pointer-events: none; font-weight: 700; font-size: 1.4rem; color: #ffd980; text-shadow: 0 2px 6px rgba(0,0,0,0.6); animation: rise 0.9s ease-out forwards; z-index: 5; }
+  .crumb { position: absolute; pointer-events: none; font-size: 0.7rem; opacity: 0.85; will-change: transform, opacity; }
+  @keyframes crumb-fly {
+    from { transform: translate(-50%, -50%) rotate(0deg); opacity: 0.95; }
+    to   { transform: translate(var(--cx), var(--cy)) rotate(var(--cr)); opacity: 0; }
+  }
   @keyframes rise { from { opacity: 1; transform: translate(-50%, 0) scale(1); } to { opacity: 0; transform: translate(-50%, -120px) scale(1.4); } }
   .shop { background: rgba(0,0,0,0.35); border-top: 1px solid rgba(255,220,180,0.15); padding: 12px; max-height: 50vh; overflow-y: auto; }
   .shop-title { font-size: 0.78rem; opacity: 0.65; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 10px; padding: 0 4px; }
@@ -130,6 +135,12 @@ const EVENTS = [
   { id: 'wizard_chant',   copy: 'the wizard chanted something. +500',                 kind: 'instant',     amount: 500 },
   { id: 'cow_returns',    copy: 'the bread cow returned with friends. x3 for 25s',    kind: 'buff',        duration: 25000, mult: 3 },
   { id: 'mouse',          copy: 'a mouse. -100. unsurprising.',                       kind: 'instant',     amount: -100 },
+  { id: 'union',          copy: 'the apprentices unionized. wages up. -25% for 40s',  kind: 'debuff',      duration: 40000, mult: 0.75 },
+  { id: 'happy_hour',     copy: 'happy hour. x4 rate for 10s. brief but loud.',       kind: 'buff',        duration: 10000, mult: 4 },
+  { id: 'transmute',      copy: 'the wizard transmuted lead into bread. +1000',       kind: 'instant',     amount: 1000 },
+  { id: 'factory_break',  copy: 'the factory broke a belt. -10% rate for 60s',        kind: 'debuff',      duration: 60000, mult: 0.9 },
+  { id: 'tinyclaw_drop',  copy: 'tinyclaw misjudged a swoop. dropped 200. yours now.', kind: 'instant',    amount: 200 },
+  { id: 'sourdough',      copy: 'the starter is unusually active. x2 for 30s',         kind: 'buff',        duration: 30000, mult: 2 },
 ];
 
 const ACHIEVEMENTS = [
@@ -486,6 +497,22 @@ pumpEl.addEventListener('pointerdown', (e) => {
   f.style.left = x + 'px'; f.style.top = y + 'px';
   pumpEl.appendChild(f);
   setTimeout(() => f.remove(), 900);
+  // Crumb particles — fewer at high streak so it doesn't get spammy.
+  const crumbCount = streakCount >= COMBO_THRESHOLDS[2] ? 1 : streakCount >= COMBO_THRESHOLDS[1] ? 2 : 4;
+  for (let i = 0; i < crumbCount; i++) {
+    const c = document.createElement('div');
+    c.className = 'crumb';
+    c.textContent = ['·', '•', '◦'][i % 3];
+    c.style.left = x + 'px'; c.style.top = y + 'px';
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 40 + Math.random() * 40;
+    c.style.setProperty('--cx', Math.cos(angle) * dist + 'px');
+    c.style.setProperty('--cy', Math.sin(angle) * dist + 'px');
+    c.style.setProperty('--cr', (Math.random() * 360 - 180) + 'deg');
+    c.style.animation = `crumb-fly ${600 + Math.random() * 200}ms ease-out forwards`;
+    pumpEl.appendChild(c);
+    setTimeout(() => c.remove(), 850);
+  }
   renderCount(); renderStreak(); refreshTreats(); checkAchievements();
   if (navigator.vibrate) navigator.vibrate(HAPTIC_MS);
 });
