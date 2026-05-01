@@ -28,7 +28,9 @@
   .pump.combo-3 { filter: drop-shadow(0 0 44px rgba(255,80,20,1)); animation: pulse 0.6s ease-in-out infinite; }
   @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.05); } }
   .float { position: absolute; pointer-events: none; font-weight: 700; font-size: 1.4rem; color: #ffd980; text-shadow: 0 2px 6px rgba(0,0,0,0.6); animation: rise 0.9s ease-out forwards; z-index: 5; }
+  .float.crit { font-size: 2.4rem; color: #ffe066; text-shadow: 0 0 18px rgba(255,210,80,0.9), 0 2px 6px rgba(0,0,0,0.6); }
   .crumb { position: absolute; pointer-events: none; font-size: 0.7rem; opacity: 0.85; will-change: transform, opacity; }
+  .crumb.crit { font-size: 1.1rem; color: #ffe066; }
   @keyframes crumb-fly {
     from { transform: translate(-50%, -50%) rotate(0deg); opacity: 0.95; }
     to   { transform: translate(var(--cx), var(--cy)) rotate(var(--cr)); opacity: 0; }
@@ -101,7 +103,7 @@
     <div class="shop-title">Treats</div>
     <div id="treats"></div>
   </section>
-  <button class="topbtn" id="ach-btn" aria-label="Achievements">🏆 <span id="ach-count">0/14</span></button>
+  <button class="topbtn" id="ach-btn" aria-label="Achievements">🏆 <span id="ach-count">0/16</span></button>
   <button class="topbtn" id="reset" aria-label="Reset save">RESET</button>
   <div class="toast" id="toast"></div>
   <div class="event-banner" id="event-banner"></div>
@@ -171,8 +173,10 @@ const ACHIEVEMENTS = [
   { id: 'streak_50', icon: '⚡', name: 'speed demon',          desc: 'genuinely concerning.',                                        check: s => s.longestStreak >= 50 },
   { id: 'lucky',     icon: '🍀', name: 'got lucky',            desc: 'three buffs in a row. statistically suspicious.',             check: s => s.buffsConsecutive >= 3 },
   { id: 'long_haul', icon: '⏳', name: 'long haul',            desc: 'played for 24 hours. hello.',                                 check: s => (Date.now() - s.startedAt) >= 24*3600*1000 },
+  { id: 'late_game', icon: '🪐', name: 'cosmic baker',         desc: 'owned a Loaf Universe. concerning scale.',                    check: s => (s.owned.universe||0) >= 1 },
   { id: 'crown',     icon: '👑', name: 'crowned',              desc: 'the kingdom kneels.',                                          check: s => (s.owned.crowncake||0) >= 1 },
   { id: 'egg',       icon: '🐣', name: 'eggcellent decision',  desc: 'she winks at you sometimes.',                                  check: s => s.hasEgg === true, hidden: true },
+  { id: 'crits_10',  icon: '✦', name: 'rare hit',             desc: 'ten critical taps. statistically allowed.',                   check: s => (s.criticalTaps || 0) >= 10, hidden: true },
 ];
 
 // Tunables — change these to retune balance.
@@ -191,6 +195,7 @@ const WINK_MIN_MS = 8000;
 const WINK_MAX_MS = 15000;
 const WINK_DURATION_MS = 400;
 const HAPTIC_MS = 8;
+const HAPTIC_CRIT_MS = 18;
 const OFFLINE_CAP_SEC = 8 * 3600;
 const SAVE_INTERVAL_MS = 5000;
 const TICK_MS = 1000;
@@ -201,13 +206,17 @@ const CRUMB_DIST_RANGE = 40;
 const CRUMB_DURATION_MIN = 600;
 const CRUMB_DURATION_RANGE = 200;
 const CRUMB_LIFETIME_MS = 850;
+const CRIT_CHANCE = 0.05;          // 5% per tap
+const CRIT_MULT = 10;              // ×10 on crit
+const CRIT_CRUMB_BONUS = 6;        // extra crumbs on crit
+const ACH_BONUS_PER_UNLOCK = 0.01; // +1% rate per achievement
 
 function defaultState() {
   return {
     count: 0, owned: {}, lifetime: 0, lastTick: Date.now(),
     achievements: {}, totalTaps: 0, longestStreak: 0,
     buffsConsecutive: 0, startedAt: Date.now(), hasEgg: false,
-    activeEffects: [], saveVersion: 2,
+    activeEffects: [], criticalTaps: 0, saveVersion: 2,
   };
 }
 
@@ -237,6 +246,7 @@ function load() {
     state.startedAt = typeof s.startedAt === 'number' ? s.startedAt : Date.now();
     state.hasEgg = !!s.hasEgg;
     state.activeEffects = Array.isArray(s.activeEffects) ? s.activeEffects : [];
+    state.criticalTaps = typeof s.criticalTaps === 'number' ? s.criticalTaps : 0;
     state.lastTick = typeof s.lastTick === 'number' ? s.lastTick : Date.now();
     state.saveVersion = 2;
     if (isV1) { localStorage.removeItem(SAVE_KEY_V1); save(); }
@@ -272,7 +282,10 @@ function effectMultiplier() {
   for (const e of state.activeEffects) if (now < e.expiresAt) m *= e.mult;
   return m;
 }
-function rate() { return passiveRate() * effectMultiplier(); }
+function achievementBonus() {
+  return Object.keys(state.achievements || {}).length * ACH_BONUS_PER_UNLOCK;
+}
+function rate() { return passiveRate() * (1 + achievementBonus()) * effectMultiplier(); }
 function comboTier() {
   // Walk thresholds high→low, return matching multiplier index.
   for (let i = COMBO_THRESHOLDS.length - 1; i >= 0; i--) {
@@ -288,7 +301,7 @@ function comboTierIndex() {
 }
 function tapAmount() {
   const bonus = TREATS.filter(t => t.tapBonus).reduce((s, t) => s + (t.tapBonus * (state.owned[t.id] || 0)), 0);
-  return (1 + bonus) * comboTier() * effectMultiplier();
+  return (1 + bonus) * comboTier() * (1 + achievementBonus()) * effectMultiplier();
 }
 function priceOf(t) { return Math.ceil(t.cost * Math.pow(t.costGrowth, state.owned[t.id] || 0)); }
 function toast(msg) {
@@ -434,7 +447,8 @@ function renderAchPanel() {
       </div>`;
     achListEl.appendChild(row);
   }
-  achSubEl.textContent = `${earned} of ${ACHIEVEMENTS.length}`;
+  const bonus = (earned * ACH_BONUS_PER_UNLOCK * 100).toFixed(0);
+  achSubEl.textContent = `${earned} of ${ACHIEVEMENTS.length} · +${bonus}% rate`;
   achCountEl.textContent = `${earned}/${ACHIEVEMENTS.length}`;
 }
 function buy(t) {
@@ -524,24 +538,26 @@ pumpEl.addEventListener('pointerdown', (e) => {
   clearTimeout(streakResetTimer);
   streakResetTimer = setTimeout(() => { streakCount = 0; renderStreak(); }, COMBO_RESET_MS);
 
-  const gain = Math.floor(tapAmount());
+  const crit = Math.random() < CRIT_CHANCE;
+  const gain = Math.floor(tapAmount() * (crit ? CRIT_MULT : 1));
   state.count += gain; state.lifetime += gain; state.totalTaps++;
+  if (crit) state.criticalTaps = (state.criticalTaps || 0) + 1;
   const rect = pumpEl.getBoundingClientRect();
   const x = e.clientX - rect.left, y = e.clientY - rect.top;
   const f = document.createElement('div');
-  f.className = 'float'; f.textContent = `+${fmt(gain)}`;
+  f.className = 'float' + (crit ? ' crit' : ''); f.textContent = (crit ? '✦+' : '+') + fmt(gain);
   f.style.left = x + 'px'; f.style.top = y + 'px';
   pumpEl.appendChild(f);
   setTimeout(() => f.remove(), 900);
-  // Crumb particles — fewer at high streak so it doesn't get spammy.
-  const crumbCount = CRUMB_COUNTS[comboTierIndex()];
+  // Crumb particles — fewer at high streak; extra burst on crit.
+  const crumbCount = CRUMB_COUNTS[comboTierIndex()] + (crit ? CRIT_CRUMB_BONUS : 0);
   for (let i = 0; i < crumbCount; i++) {
     const c = document.createElement('div');
-    c.className = 'crumb';
+    c.className = 'crumb' + (crit ? ' crit' : '');
     c.textContent = CRUMB_GLYPHS[Math.floor(Math.random() * CRUMB_GLYPHS.length)];
     c.style.left = x + 'px'; c.style.top = y + 'px';
     const angle = Math.random() * Math.PI * 2;
-    const dist = CRUMB_DIST_MIN + Math.random() * CRUMB_DIST_RANGE;
+    const dist = CRUMB_DIST_MIN + Math.random() * CRUMB_DIST_RANGE * (crit ? 1.6 : 1);
     c.style.setProperty('--cx', Math.cos(angle) * dist + 'px');
     c.style.setProperty('--cy', Math.sin(angle) * dist + 'px');
     c.style.setProperty('--cr', (Math.random() * 360 - 180) + 'deg');
@@ -550,7 +566,7 @@ pumpEl.addEventListener('pointerdown', (e) => {
     setTimeout(() => c.remove(), CRUMB_LIFETIME_MS);
   }
   renderCount(); renderStreak(); refreshTreats(); checkAchievements();
-  if (navigator.vibrate) navigator.vibrate(HAPTIC_MS);
+  if (navigator.vibrate) navigator.vibrate(crit ? HAPTIC_CRIT_MS : HAPTIC_MS);
 });
 
 // Achievements panel
