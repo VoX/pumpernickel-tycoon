@@ -83,6 +83,11 @@
   .asset.bumped { transform: scale(1.18); background: rgba(255,220,180,0.22); }
   @keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
   .asset.live .asset-icon { animation: bob var(--bob, 1.6s) ease-in-out infinite; }
+
+  /* Golden Pumpernickel — random clickable bonus. */
+  .golden { position: fixed; font-size: 2.8rem; z-index: 80; cursor: pointer; filter: drop-shadow(0 0 18px rgba(255,210,80,0.95)) drop-shadow(0 0 6px rgba(255,180,40,0.8)); display: none; pointer-events: auto; user-select: none; }
+  .golden.active { display: block; animation: golden-wiggle 1.4s ease-in-out infinite; }
+  @keyframes golden-wiggle { 0%,100% { transform: rotate(-10deg) scale(1); } 50% { transform: rotate(10deg) scale(1.12); } }
 </style>
 </head>
 <body>
@@ -107,6 +112,7 @@
   <button class="topbtn" id="reset" aria-label="Reset save">RESET</button>
   <div class="toast" id="toast"></div>
   <div class="event-banner" id="event-banner"></div>
+  <div class="golden" id="golden" role="button" aria-label="Golden Pumpernickel">🥯</div>
   <div class="ach-modal" id="ach-modal" role="dialog" aria-label="Achievements">
     <div class="ach-card">
       <button class="ach-close" id="ach-close" aria-label="Close">×</button>
@@ -224,13 +230,18 @@ const CRIT_CHANCE = 0.05;          // 5% per tap
 const CRIT_MULT = 10;              // ×10 on crit
 const CRIT_CRUMB_BONUS = 6;        // extra crumbs on crit
 const ACH_BONUS_PER_UNLOCK = 0.01; // +1% rate per achievement
+const GOLDEN_MIN_MS = 60000;
+const GOLDEN_MAX_MS = 180000;
+const GOLDEN_LIFETIME_MS = 9000;
+const GOLDEN_BONUS_SECONDS = 60;
+const GOLDEN_BONUS_FALLBACK = 100; // floor for early game when rate=0
 
 function defaultState() {
   return {
     count: 0, owned: {}, lifetime: 0, lastTick: Date.now(),
     achievements: {}, totalTaps: 0, longestStreak: 0,
     buffsConsecutive: 0, startedAt: Date.now(), hasEgg: false,
-    activeEffects: [], criticalTaps: 0, saveVersion: 2,
+    activeEffects: [], criticalTaps: 0, goldensClicked: 0, saveVersion: 2,
   };
 }
 
@@ -261,6 +272,7 @@ function load() {
     state.hasEgg = !!s.hasEgg;
     state.activeEffects = Array.isArray(s.activeEffects) ? s.activeEffects : [];
     state.criticalTaps = typeof s.criticalTaps === 'number' ? s.criticalTaps : 0;
+    state.goldensClicked = typeof s.goldensClicked === 'number' ? s.goldensClicked : 0;
     state.lastTick = typeof s.lastTick === 'number' ? s.lastTick : Date.now();
     state.saveVersion = 2;
     if (isV1) { localStorage.removeItem(SAVE_KEY_V1); save(); }
@@ -343,6 +355,7 @@ const achSubEl = document.getElementById('ach-sub');
 
 const treatRowsById = {}; // built once by buildTreatRows()
 const bakeryEl = document.getElementById('bakery');
+const goldenEl = document.getElementById('golden');
 const bakeryAssetsById = {}; // built lazily by refreshBakery()
 
 function refreshBakery() {
@@ -531,6 +544,40 @@ function scheduleNextEvent() {
   setTimeout(() => { fireEvent(); scheduleNextEvent(); }, wait);
 }
 
+// Golden Pumpernickel — random clickable bonus.
+let goldenExpiresAt = 0;
+function spawnGolden() {
+  if (passiveRate() === 0) { scheduleNextGolden(); return; }
+  goldenEl.style.left = (Math.random() * 70 + 15) + '%';
+  goldenEl.style.top = (Math.random() * 50 + 20) + '%';
+  goldenEl.classList.add('active');
+  goldenExpiresAt = Date.now() + GOLDEN_LIFETIME_MS;
+  const myExpiry = goldenExpiresAt;
+  setTimeout(() => {
+    if (goldenExpiresAt === myExpiry) {
+      goldenEl.classList.remove('active');
+      goldenExpiresAt = 0;
+      scheduleNextGolden();
+    }
+  }, GOLDEN_LIFETIME_MS);
+}
+function scheduleNextGolden() {
+  const wait = GOLDEN_MIN_MS + Math.random() * (GOLDEN_MAX_MS - GOLDEN_MIN_MS);
+  setTimeout(spawnGolden, wait);
+}
+goldenEl.addEventListener('pointerdown', (e) => {
+  e.stopPropagation();
+  if (!goldenEl.classList.contains('active')) return;
+  const gain = Math.max(Math.floor(rate() * GOLDEN_BONUS_SECONDS), GOLDEN_BONUS_FALLBACK);
+  state.count += gain; state.lifetime += gain;
+  state.goldensClicked = (state.goldensClicked || 0) + 1;
+  toast(`✨ golden pumpernickel! +${fmt(gain)}`);
+  goldenEl.classList.remove('active');
+  goldenExpiresAt = 0;
+  renderCount(); refreshTreats(); save();
+  scheduleNextGolden();
+});
+
 // Companion wink
 function scheduleWink() {
   const wait = WINK_MIN_MS + Math.random() * (WINK_MAX_MS - WINK_MIN_MS);
@@ -621,6 +668,7 @@ setPumpEmoji();
 renderCount();
 renderAchPanel();
 setTimeout(() => scheduleNextEvent(), FIRST_EVENT_DELAY);
+scheduleNextGolden();
 scheduleWink();
 checkAchievements();
 </script>
