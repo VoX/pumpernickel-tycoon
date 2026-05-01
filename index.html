@@ -141,6 +141,9 @@
   .asset.bumped { transform: scale(1.18); background: rgba(255,220,180,0.22); }
   @keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
   .asset.live .asset-icon { animation: bob var(--bob, 1.6s) ease-in-out infinite; }
+  .asset .burnt-crust { position: absolute; top: -6px; right: -6px; font-size: 0.95rem; cursor: pointer; animation: crust-pulse 1.4s ease-in-out infinite; filter: drop-shadow(0 0 6px rgba(180,40,40,0.85)); }
+  @keyframes crust-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.18); } }
+  .asset { position: relative; }
 
   /* Golden Pumpernickel — random clickable bonus. */
   .golden { position: fixed; font-size: 2.8rem; z-index: 80; cursor: pointer; filter: drop-shadow(0 0 18px rgba(255,210,80,0.95)) drop-shadow(0 0 6px rgba(255,180,40,0.8)); pointer-events: none; user-select: none; opacity: 0; transition: opacity 0.25s; left: -200px; top: -200px; }
@@ -418,8 +421,14 @@ const GOLDEN_BUFFS = [
 ];
 const CRUMB_RIPEN_MS = 60 * 60 * 1000;  // ripe crumb every 1 hour real-time
 const PHASE_DURATION_MS = 30 * 60 * 1000; // each sourdough phase lasts ~30 min of play
+const BURNT_CRUST_THRESHOLD = 1e9;        // unlocks at 1B lifetime
+const BURNT_CRUST_MIN_MS = 5 * 60 * 1000; // 5min between attempts
+const BURNT_CRUST_MAX_MS = 15 * 60 * 1000;
+const BURNT_CRUST_DRAIN_PCT = 0.05;       // 5% of baker rate while attached
+const BURNT_CRUST_PAYOUT_MULT = 1.10;     // pop pays 110% of drained
+const BURNT_CRUST_MAX = 3;                // cap active crusts
 const PHASES = [
-  { id: 'knead', icon: '✊', name: 'Knead',  desc: 'longer combos. streak decay halved.',                  comboMult: 2 },
+  { id: 'knead', icon: '✊', name: 'Knead',  desc: 'longer combos. streak decay halved.',                  comboMult: 1.25, streakDecayMult: 2 },
   { id: 'rise',  icon: '🫧', name: 'Rise',   desc: '+50% passive rate, but tap value -50%.',                rateMult: 1.5, tapMult: 0.5 },
   { id: 'bake',  icon: '🔥', name: 'Bake',   desc: 'buff events fire 2× often. debuffs are blocked.',       buffPace: 0.5, blockDebuffs: true },
   { id: 'cool',  icon: '❄️', name: 'Cool',  desc: 'chaos events suspended. every 60s, bank +10%.',          suspendEvents: true, bankBonusEvery: 60, bankBonusPct: 0.10 },
@@ -467,6 +476,7 @@ function defaultState() {
     crumbs: 0, lastCrumbAt: Date.now(),
     phaseIndex: 0, phaseStartAt: Date.now(),
     garden: emptyGarden(), barleyBonus: 0,
+    burntCrusts: [],
     saveVersion: 3,
   };
 }
@@ -525,6 +535,9 @@ function load() {
       state.garden = emptyGarden();
     }
     state.barleyBonus = typeof s.barleyBonus === 'number' ? s.barleyBonus : 0;
+    state.burntCrusts = Array.isArray(s.burntCrusts) ? s.burntCrusts.filter(c =>
+      c && typeof c.bakerId === 'string' && typeof c.attachedAt === 'number' && typeof c.drained === 'number'
+    ) : [];
     state.saveVersion = 3;
     if (isV1) { localStorage.removeItem(SAVE_KEY_V1); save(); }
     const dt = Math.min((Date.now() - state.lastTick) / 1000, OFFLINE_CAP_SEC);
@@ -605,9 +618,25 @@ function passiveRate() {
     for (const s of TREATS) {
       if (s.synergyTarget === t.id && (state.owned[s.id] || 0) > 0) mult *= s.synergyMult;
     }
-    total += t.rate * (state.owned[t.id] || 0) * mult;
+    let contribution = t.rate * (state.owned[t.id] || 0) * mult;
+    // Burnt crust drain — each crust on this baker reduces its contribution.
+    const crustsHere = (state.burntCrusts || []).filter(c => c.bakerId === t.id).length;
+    if (crustsHere > 0) contribution *= Math.pow(1 - BURNT_CRUST_DRAIN_PCT, crustsHere);
+    total += contribution;
   }
   return total;
+}
+function bakerCrustDrainPerSecond(t) {
+  // Per-second loss from crusts on this baker (used for popout payout accumulator).
+  const crustsHere = (state.burntCrusts || []).filter(c => c.bakerId === t.id).length;
+  if (crustsHere === 0) return 0;
+  let mult = 1;
+  for (const s of TREATS) {
+    if (s.synergyTarget === t.id && (state.owned[s.id] || 0) > 0) mult *= s.synergyMult;
+  }
+  const baseContribution = t.rate * (state.owned[t.id] || 0) * mult;
+  const withDrain = baseContribution * Math.pow(1 - BURNT_CRUST_DRAIN_PCT, crustsHere);
+  return baseContribution - withDrain;
 }
 function effectMultiplier() {
   const now = Date.now();
@@ -661,7 +690,7 @@ function comboTierIndex() {
 function tapAmount() {
   const bonus = TREATS.filter(t => t.tapBonus).reduce((s, t) => s + (t.tapBonus * (state.owned[t.id] || 0)), 0);
   const fromRate = passiveRate() * TAP_RATE_FACTOR;
-  return (1 + bonus + fromRate) * comboTier() * globalMult() * phaseTapMult();
+  return (1 + bonus + fromRate) * comboTier() * phaseComboMult() * globalMult() * phaseTapMult();
 }
 function priceOf(t) { return Math.ceil(t.cost * Math.pow(t.costGrowth, state.owned[t.id] || 0) * phaseTreatDiscount()); }
 function lastPriceOf(t) {
@@ -771,6 +800,19 @@ function refreshBakery() {
       row.el.classList.add('bumped');
       setTimeout(() => row.el.classList.remove('bumped'), 220);
     }
+    // Burnt crusts attached to this baker — show one popup-able icon per crust.
+    const existingCrusts = row.el.querySelectorAll('.burnt-crust');
+    existingCrusts.forEach(n => n.remove());
+    const crustsHere = (state.burntCrusts || []).map((c, i) => ({ c, i })).filter(x => x.c.bakerId === t.id);
+    crustsHere.forEach(({ c, i }, k) => {
+      const crustEl = document.createElement('span');
+      crustEl.className = 'burnt-crust';
+      crustEl.textContent = '🥵';
+      crustEl.title = `burnt crust — drained ${fmt(c.drained)} so far. tap to pop for ${fmt(c.drained * BURNT_CRUST_PAYOUT_MULT)}.`;
+      crustEl.style.right = (-6 - k * 14) + 'px';
+      crustEl.addEventListener('click', (e) => { e.stopPropagation(); popBurntCrust(state.burntCrusts.indexOf(c)); });
+      row.el.appendChild(crustEl);
+    });
     // Always refresh hover tooltip — rate may change due to synergy purchases.
     row.el.title = bakerInfo(t);
   }
@@ -1094,6 +1136,36 @@ goldenEl.addEventListener('pointerdown', (e) => {
   scheduleNextGolden();
 });
 
+// Burnt Crusts — late-game pests that drain a baker, pop for 110% payout.
+function attachBurntCrust() {
+  if (!state.burntCrusts) state.burntCrusts = [];
+  if (state.burntCrusts.length >= BURNT_CRUST_MAX) { scheduleNextBurntCrust(); return; }
+  if (state.lifetime < BURNT_CRUST_THRESHOLD) { scheduleNextBurntCrust(); return; }
+  // Pick a random owned production baker.
+  const owned = TREATS.filter(t => t.rate && (state.owned[t.id] || 0) > 0);
+  if (owned.length === 0) { scheduleNextBurntCrust(); return; }
+  const t = owned[Math.floor(Math.random() * owned.length)];
+  state.burntCrusts.push({ bakerId: t.id, attachedAt: Date.now(), drained: 0 });
+  showBanner(`🥵 a burnt crust attached to your ${t.name}. tap to pop.`, 'debuff');
+  refreshBakery();
+  scheduleNextBurntCrust();
+}
+function scheduleNextBurntCrust() {
+  const wait = BURNT_CRUST_MIN_MS + Math.random() * (BURNT_CRUST_MAX_MS - BURNT_CRUST_MIN_MS);
+  setTimeout(attachBurntCrust, wait);
+}
+function popBurntCrust(crustIdx) {
+  if (!state.burntCrusts || crustIdx < 0 || crustIdx >= state.burntCrusts.length) return;
+  const c = state.burntCrusts[crustIdx];
+  const payout = Math.floor(c.drained * BURNT_CRUST_PAYOUT_MULT);
+  state.count += payout;
+  state.lifetime += Math.max(0, payout - Math.floor(c.drained)); // only the bonus over what was drained
+  state.burntCrusts.splice(crustIdx, 1);
+  toast(`🥵 popped! +${fmt(payout)}`);
+  SFX.golden();
+  save(); renderCount(); refreshBakery();
+}
+
 // Companion wink
 function scheduleWink() {
   const wait = WINK_MIN_MS + Math.random() * (WINK_MAX_MS - WINK_MIN_MS);
@@ -1159,12 +1231,14 @@ function startPumpFrame() {
 pumpEl.addEventListener('pointerdown', (e) => {
   const now = Date.now();
   const prevTier = comboTierIndex();
-  if (now - lastTapTime < COMBO_RESET_MS) streakCount++;
+  // Knead phase doubles the combo decay window, letting streaks last longer.
+  const decayMs = COMBO_RESET_MS * (currentPhase().streakDecayMult || 1);
+  if (now - lastTapTime < decayMs) streakCount++;
   else streakCount = 1;
   lastTapTime = now;
   if (streakCount > state.longestStreak) state.longestStreak = streakCount;
   clearTimeout(streakResetTimer);
-  streakResetTimer = setTimeout(() => { streakCount = 0; renderStreak(); }, COMBO_RESET_MS);
+  streakResetTimer = setTimeout(() => { streakCount = 0; renderStreak(); }, decayMs);
   // Tier-up aura burst when crossing a combo threshold.
   const newTier = comboTierIndex();
   if (newTier > prevTier && newTier > 0) { fireAura(); toast(`🔥 streak ×${comboTier()}`); }
@@ -1447,7 +1521,6 @@ function harvestPlot(idx) {
   }
   if (species.crownReward) {
     state.crowns = (state.crowns || 0) + species.crownReward;
-    state.lifetimeBaked = state.lifetimeBaked || 0;
   }
   toast(`🌱 harvested ${species.name}`);
   // Cross-pollination: 5% chance per matching neighbor to seed an empty plot
@@ -1460,12 +1533,18 @@ function harvestPlot(idx) {
     }
     if (empty.length) {
       const target = empty[Math.floor(Math.random() * empty.length)];
-      const candidates = SPECIES.filter(s => s.id !== 'voidmold');
-      const hybrid = candidates[Math.floor(Math.random() * candidates.length)];
-      state.garden[target].species = hybrid.id;
-      state.garden[target].plantedAt = Date.now();
-      state.garden[target].lastTickAt = Date.now();
-      toast(`🌱 a wild ${hybrid.name} sprouted next door.`);
+      // Filter to species whose placement rules are satisfied at the target.
+      const candidates = SPECIES.filter(s =>
+        s.id !== 'voidmold' &&
+        !s.requiresAdjacent || neighborsOfSpecies(target, s.requiresAdjacent) > 0
+      ).filter(s => !s.needsEmptyNeighbors || emptyNeighbors(target) >= s.needsEmptyNeighbors);
+      if (candidates.length) {
+        const hybrid = candidates[Math.floor(Math.random() * candidates.length)];
+        state.garden[target].species = hybrid.id;
+        state.garden[target].plantedAt = Date.now();
+        state.garden[target].lastTickAt = Date.now();
+        toast(`🌱 a wild ${hybrid.name} sprouted next door.`);
+      }
     }
   }
   // Clear plot.
@@ -1475,7 +1554,7 @@ function harvestPlot(idx) {
 function clearPlot(idx) {
   const plot = state.garden[idx];
   if (!plot.species) return;
-  if (!confirm('Uproot this plot? You will not be refunded.')) return;
+  // Caller is responsible for the confirm dialog (avoids double-prompt).
   plot.species = null; plot.plantedAt = 0; plot.lastTickAt = 0;
   save(); renderGarden();
 }
@@ -1499,8 +1578,11 @@ function waterRandomPlot() {
   toast(`💧 watered the ${species.name}`);
   save(); renderCount(); renderGarden();
 }
+let speciesPickerEl = null;
 function openSpeciesPicker(idx) {
+  if (speciesPickerEl && speciesPickerEl.parentNode) return; // already open, ignore re-clicks
   const ovEl = document.createElement('div');
+  speciesPickerEl = ovEl;
   ovEl.className = 'ach-modal show';
   ovEl.style.zIndex = '500';
   const card = document.createElement('div');
@@ -1529,7 +1611,7 @@ function openSpeciesPicker(idx) {
     if (check.ok) row.addEventListener('click', () => { plantInPlot(idx, sp.id); document.body.removeChild(ovEl); });
     grid.appendChild(row);
   }
-  const close = () => { if (ovEl.parentNode) document.body.removeChild(ovEl); };
+  const close = () => { if (ovEl.parentNode) document.body.removeChild(ovEl); speciesPickerEl = null; };
   card.querySelector('.ach-close').addEventListener('click', close);
   ovEl.addEventListener('click', (e) => { if (e.target === ovEl) close(); });
 }
@@ -1612,6 +1694,22 @@ setInterval(() => {
     state.lastCrumbAt += CRUMB_RIPEN_MS;
     toast(`🍞 a ripe crumb appeared. you have ${state.crumbs}.`);
   }
+  // Burnt Crusts — accumulate drained value per-second for the pop payout.
+  if (state.burntCrusts && state.burntCrusts.length > 0) {
+    for (const c of state.burntCrusts) {
+      const t = TREATS.find(x => x.id === c.bakerId);
+      if (!t) continue;
+      // Per-tick drain = per-baker contribution × drain pct, scaled by globalMult
+      // so payout matches "real" lost rate (ach/crown bonuses apply too).
+      let mult = 1;
+      for (const s of TREATS) {
+        if (s.synergyTarget === t.id && (state.owned[s.id] || 0) > 0) mult *= s.synergyMult;
+      }
+      const baseContribution = t.rate * (state.owned[t.id] || 0) * mult;
+      c.drained += baseContribution * BURNT_CRUST_DRAIN_PCT * globalMult();
+    }
+    refreshBakery();
+  }
   // Yeast Garden — advance grow timers. Stardust requires an active buff.
   for (let i = 0; i < (state.garden ? state.garden.length : 0); i++) {
     const plot = state.garden[i];
@@ -1655,6 +1753,7 @@ refreshShop();
 renderEffects();
 renderPhase();
 setTimeout(() => scheduleNextEvent(), FIRST_EVENT_DELAY);
+scheduleNextBurntCrust();
 scheduleNextGolden();
 scheduleWink();
 checkAchievements();
